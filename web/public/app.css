@@ -100,37 +100,46 @@ body {
 }
 
 .panel-line-1 {
-  font-size: clamp(4.5rem, 18vw, 15rem);
+  font-size: clamp(3.5rem, 13vw, 12rem);
 }
 
 .panel-line-2 {
-  font-size: clamp(3.5rem, 13vw, 11rem);
+  font-size: clamp(2.5rem, 8.5vw, 7.5rem);
   color: var(--led-amber-soft);
 }
 
 .panel-line-3 {
-  font-size: clamp(3rem, 10vw, 9rem);
+  font-size: clamp(2rem, 7vw, 6rem);
   color: var(--led-amber-soft);
   opacity: 0.92;
 }
 
 /* Panel stats rows (lines 2 and 3): labelled stats in a row.
    Labels sit ABOVE the values, tiny and dim; values big and bright.
-   align-items: flex-start keeps the labels visually in line even
-   when one value (e.g. the route with its pixel arrow) renders at
-   a slightly different height from the others. */
+   - align-items: flex-start keeps the labels visually in line even
+     when one value (e.g. the route with its pixel arrow) renders
+     at a slightly different height from the others.
+   - flex-wrap: wrap lets a stat drop to a new row on narrow
+     viewports instead of overflowing and getting clipped by the
+     body's overflow:hidden. */
 .panel-stats {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: clamp(1.5rem, 5vw, 4rem);
+  column-gap: clamp(1.5rem, 5vw, 4rem);
+  row-gap: clamp(0.8rem, 2vw, 1.5rem);
   opacity: 1;
+  width: 100%;
 }
 
 /* Line 2 stat values are larger than line 3's — line 2 is the
-   main ID (callsign + route), line 3 is the secondary numeric. */
+   main ID (callsign + route), line 3 is the secondary numeric.
+   The value is capped more conservatively than line 1 so two
+   stats (FLIGHT + ROUTE) fit side-by-side on typical desktop
+   widths; on phones they wrap instead of getting clipped. */
 .panel-line-2 .stat-value {
-  font-size: clamp(3.5rem, 13vw, 11rem);
+  font-size: clamp(2.5rem, 8.5vw, 7.5rem);
 }
 
 .stat {
@@ -152,7 +161,7 @@ body {
 
 .stat-value {
   font-family: var(--font-display);
-  font-size: clamp(3rem, 10vw, 9rem);
+  font-size: clamp(2rem, 7vw, 6rem);
   color: var(--led-amber-soft);
   line-height: 0.85;
   /* Expressed in the value's own em (the large one), so the gap
