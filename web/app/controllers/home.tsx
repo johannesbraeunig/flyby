@@ -161,15 +161,15 @@ function HomePage() {
                   ))}
                 </select>
               </label>
-              <button type="submit" class="settings-apply">
-                Apply
-              </button>
               <button
                 type="button"
                 id="update-location-btn"
                 class="settings-secondary"
               >
                 Update location
+              </button>
+              <button type="submit" class="settings-apply">
+                Apply
               </button>
             </form>
           <p class="settings-meta">
