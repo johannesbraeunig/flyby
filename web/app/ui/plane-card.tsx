@@ -93,7 +93,7 @@ export function PlaneCard() {
             Settings
           </label>
           <span class="panel-link-sep" aria-hidden="true">
-            {' · '}
+            |
           </span>
           <button type="button" id="fullscreen-btn" class="panel-link panel-link-btn">
             Fullscreen
