@@ -222,17 +222,19 @@ body {
    uses currentColor and inherits the amber glow via drop-shadow.
    crispEdges keeps the pixels hard. Aspect 9:5; kept narrow so it
    reads as a separator, not a dominant glyph.
-   - `vertical-align: 0.2em` sits slightly above the text midline;
-     plain `middle` looked a touch too low next to the big Jersey 10
-     letterforms.
-   - margin tightened to 0.12em so the arrow hugs the adjacent
-     airport codes instead of floating between them. */
+   - `vertical-align: 0.17em` sits slightly above the text midline;
+     plain `middle` read too low next to Jersey 10's tall caps and
+     `0.2em` was a touch too high.
+   - margin asymmetric: the left side is ~1 pixel-unit (0.048em,
+     one dot in the 9-wide SVG grid) tighter than the right, so
+     the arrow hugs the "origin" airport on the left more than the
+     "destination" on the right. */
 .pixel-arrow {
   display: inline-block;
   width: 0.48em;
   height: 0.27em;
-  vertical-align: 0.2em;
-  margin: 0 0.12em;
+  vertical-align: 0.17em;
+  margin: 0 0.12em 0 0.07em;
   fill: currentColor;
   shape-rendering: crispEdges;
   filter: drop-shadow(0 0 8px var(--led-glow)) drop-shadow(0 0 2px var(--led-glow));
