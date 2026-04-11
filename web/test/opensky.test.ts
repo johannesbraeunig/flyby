@@ -1,7 +1,11 @@
 import * as assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { parseStates, rankByDistance } from '../app/data/opensky.ts'
+import {
+  parseStates,
+  rankByDistance,
+  selectNearestPreferringCommercial,
+} from '../app/data/opensky.ts'
 
 // One row from OpenSky's /api/states/all, positional layout:
 //   [icao24, callsign, origin_country, time_position, last_contact,
@@ -99,5 +103,51 @@ describe('rankByDistance', () => {
     let nearB = rankByDistance(positions, 54.0, 10.0)
     assert.equal(nearA[0]!.icao24, 'a')
     assert.equal(nearB[0]!.icao24, 'b')
+  })
+})
+
+describe('selectNearestPreferringCommercial', () => {
+  it('returns null for an empty list', () => {
+    assert.equal(selectNearestPreferringCommercial([]), null)
+  })
+
+  it('picks the nearest commercial plane even when a GA plane is closer', () => {
+    let positions = parseStates({
+      states: [
+        row({ 0: 'ga-1', 1: 'DMMXC   ', 5: 9.99, 6: 53.55 }), // tiny GA, right next to observer
+        row({ 0: 'lh-1', 1: 'DLH441  ', 5: 10.0, 6: 54.0 }), // further Lufthansa
+      ],
+    })
+    let ranked = rankByDistance(positions, 53.5511, 9.9937)
+    // Distance-sorted: DMMXC first, DLH441 second.
+    assert.equal(ranked[0]!.callsign, 'DMMXC')
+    // Commercial preference flips the pick to DLH441.
+    let pick = selectNearestPreferringCommercial(ranked)
+    assert.equal(pick?.callsign, 'DLH441')
+  })
+
+  it('falls back to the nearest plane when no commercial flights are in range', () => {
+    let positions = parseStates({
+      states: [
+        row({ 0: 'ga-1', 1: 'DMMXC   ', 5: 9.99, 6: 53.55 }),
+        row({ 0: 'ga-2', 1: 'N45DP   ', 5: 10.0, 6: 54.0 }),
+      ],
+    })
+    let ranked = rankByDistance(positions, 53.5511, 9.9937)
+    let pick = selectNearestPreferringCommercial(ranked)
+    assert.equal(pick?.callsign, 'DMMXC')
+  })
+
+  it('picks the NEAREST commercial plane when multiple are in range', () => {
+    let positions = parseStates({
+      states: [
+        row({ 0: 'lh-far', 1: 'DLH999  ', 5: 11.0, 6: 55.0 }),
+        row({ 0: 'ba-near', 1: 'BAW117  ', 5: 10.0, 6: 54.0 }),
+        row({ 0: 'ga-closest', 1: 'DMMXC   ', 5: 9.99, 6: 53.55 }),
+      ],
+    })
+    let ranked = rankByDistance(positions, 53.5511, 9.9937)
+    let pick = selectNearestPreferringCommercial(ranked)
+    assert.equal(pick?.callsign, 'BAW117')
   })
 })

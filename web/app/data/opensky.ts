@@ -9,6 +9,7 @@
 // same area share results, plus stale-on-429 to keep the page useful
 // when the API briefly hates us.
 
+import { lookupAirline } from './airlines.ts'
 import { bboxFor, haversineKm, type BBox } from './geo.ts'
 
 const OPENSKY_URL = 'https://opensky-network.org/api/states/all'
@@ -210,16 +211,32 @@ export async function getNearestAircraft(
   }
 }
 
+// Pick a "best" plane from a distance-ranked candidate list. We prefer
+// commercial airliners over general-aviation aircraft — "commercial"
+// meaning the callsign starts with an ICAO prefix we know
+// (Lufthansa, BA, KLM, …). In practice this biases toward large
+// passenger jets and away from Cessnas, private jets registered as
+// tail numbers, and surveying helicopters. Falls back to the overall
+// nearest when no commercial flight is in range.
+export function selectNearestPreferringCommercial(ranked: ReadonlyArray<Plane>): Plane | null {
+  if (ranked.length === 0) return null
+  for (let p of ranked) {
+    if (lookupAirline(p.callsign)) return p
+  }
+  return ranked[0] ?? null
+}
+
 function pickFromCached(
   entry: CacheEntry,
   observed: { lat: number; lon: number; radiusKm: number },
 ): NearestResult {
   let ranked = rankByDistance(entry.positions, observed.lat, observed.lon)
   let candidates = ranked.filter((p) => p.distanceKm <= observed.radiusKm)
-  if (candidates.length === 0) {
+  let pick = selectNearestPreferringCommercial(candidates)
+  if (!pick) {
     return { kind: 'empty', observed, fetchedAt: entry.fetchedAt }
   }
-  return { kind: 'ok', plane: candidates[0]!, observed, fetchedAt: entry.fetchedAt, stale: false }
+  return { kind: 'ok', plane: pick, observed, fetchedAt: entry.fetchedAt, stale: false }
 }
 
 function staleFromCached(
@@ -229,10 +246,11 @@ function staleFromCached(
 ): NearestResult {
   let ranked = rankByDistance(entry.positions, observed.lat, observed.lon)
   let candidates = ranked.filter((p) => p.distanceKm <= observed.radiusKm)
-  if (candidates.length === 0) {
+  let pick = selectNearestPreferringCommercial(candidates)
+  if (!pick) {
     return { kind: 'empty', observed, fetchedAt: entry.fetchedAt }
   }
-  return { kind: 'ok-stale', plane: candidates[0]!, observed, fetchedAt: entry.fetchedAt, stale: true, reason }
+  return { kind: 'ok-stale', plane: pick, observed, fetchedAt: entry.fetchedAt, stale: true, reason }
 }
 
 // Test hook: clear the in-memory cache between tests.

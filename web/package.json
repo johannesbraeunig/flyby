@@ -3,16 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch server.ts",
+    "dev": "NODE_ENV=development PORT=44100 tsx watch server.ts",
     "start": "tsx server.ts",
     "test": "NODE_ENV=test tsx --test 'test/**/*.test.ts' 'app/**/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
+  "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "remix": "next",
     "tsx": "^4.20.6"
   },
   "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10",
     "@types/node": "^24.6.0",
     "typescript": "^5.9.3"
   }

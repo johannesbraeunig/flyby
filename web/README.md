@@ -13,8 +13,8 @@ primitives (`fetch-router`, `route-pattern`, `component`, `node-fetch-server`,
 
 ```sh
 cd web
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Then open <http://localhost:44100>.
@@ -32,10 +32,10 @@ the tab is hidden and resumes on focus.
 
 | Command            | What it does                                            |
 | ------------------ | ------------------------------------------------------- |
-| `npm run dev`      | `tsx watch server.ts` on port 44100, with logger middleware |
-| `npm run start`    | Same, no watch                                          |
-| `npm test`         | `node:test` via `tsx --test` — pure logic + router      |
-| `npm run typecheck`| `tsc --noEmit`                                          |
+| `pnpm dev`         | `tsx watch server.ts` on port 44100, with logger middleware |
+| `pnpm start`       | Same, no watch; defaults to `PORT=3000` for container runtimes |
+| `pnpm test`        | `node:test` via `tsx --test` — pure logic + router      |
+| `pnpm typecheck`   | `tsc --noEmit`                                          |
 
 ## Layout
 

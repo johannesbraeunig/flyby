@@ -12,7 +12,6 @@
     "skipLibCheck": true,
     "jsx": "react-jsx",
     "jsxImportSource": "remix/component",
-    "preserveSymlinks": true,
     "noEmit": true
   },
   "exclude": ["node_modules", "dist"]
