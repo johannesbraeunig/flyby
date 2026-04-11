@@ -1,0 +1,9 @@
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+.wokwi/
+*.elf
+*.bin
+*.hex
+.DS_Store
