@@ -1,0 +1,12 @@
+# clangd config — strips PlatformIO/Xtensa-specific flags that
+# upstream clang on macOS/Linux doesn't recognize, so editor diagnostics
+# stop screaming about them in our pure-C++ files.
+
+CompileFlags:
+  Remove:
+    - -mlongcalls
+    - -mtext-section-literals
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion
+    - -free
+    - -fipa-pta
