@@ -2,7 +2,8 @@ import type { BuildAction } from 'remix/fetch-router'
 
 import { getAircraft } from '../data/aircraft.ts'
 import { getNearestAircraft } from '../data/opensky.ts'
-import { getRoute } from '../data/routes.ts'
+import { getRoute, verifyRouteAgainstTrack } from '../data/routes.ts'
+import { getTrackStart } from '../data/tracks.ts'
 import {
   DEFAULT_RADIUS_KM,
   HAMBURG,
@@ -32,18 +33,20 @@ export let home: BuildAction<'GET', typeof routes.home> = {
 
     let result = await getNearestAircraft(location.lat, location.lon, location.radiusKm)
 
-    // Enrich with route + aircraft-type info when we have a plane.
-    // Fetched in parallel via Promise.all so the extra lookup is
-    // free latency-wise (both cache aggressively — usually Map hits).
+    // Enrich with route + aircraft + track-start info in parallel.
+    // All three cache aggressively so this is usually just a few
+    // Map lookups. The track is only used to sanity-check the
+    // route — see verifyRoute below.
     let route = null
     let aircraft = null
     if (result.kind === 'ok' || result.kind === 'ok-stale') {
-      let [r, a] = await Promise.all([
+      let [r, a, t] = await Promise.all([
         result.plane.callsign ? getRoute(result.plane.callsign) : Promise.resolve(null),
         getAircraft(result.plane.icao24),
+        getTrackStart(result.plane.icao24),
       ])
-      route = r
       aircraft = a
+      route = verifyRouteAgainstTrack(r, t)
     }
 
     return render(

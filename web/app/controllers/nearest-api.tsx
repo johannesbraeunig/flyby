@@ -2,7 +2,8 @@ import type { BuildAction } from 'remix/fetch-router'
 
 import { getAircraft } from '../data/aircraft.ts'
 import { getNearestAircraft } from '../data/opensky.ts'
-import { getRoute } from '../data/routes.ts'
+import { getRoute, verifyRouteAgainstTrack } from '../data/routes.ts'
+import { getTrackStart } from '../data/tracks.ts'
 import { resolveLocation } from '../data/location.ts'
 import { routes } from '../routes.ts'
 import { PlaneCard } from '../ui/plane-card.tsx'
@@ -22,12 +23,13 @@ export let nearestApi: BuildAction<'GET', typeof routes.nearestApi> = {
     let route = null
     let aircraft = null
     if (result.kind === 'ok' || result.kind === 'ok-stale') {
-      let [r, a] = await Promise.all([
+      let [r, a, t] = await Promise.all([
         result.plane.callsign ? getRoute(result.plane.callsign) : Promise.resolve(null),
         getAircraft(result.plane.icao24),
+        getTrackStart(result.plane.icao24),
       ])
-      route = r
       aircraft = a
+      route = verifyRouteAgainstTrack(r, t)
     }
     return render(<PlaneCard result={result} route={route} aircraft={aircraft} />, {
       headers: { 'Cache-Control': 'no-store' },

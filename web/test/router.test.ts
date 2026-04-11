@@ -5,6 +5,7 @@ import { router } from '../app/router.ts'
 import { __resetAircraftCacheForTests } from '../app/data/aircraft.ts'
 import { __resetCacheForTests } from '../app/data/opensky.ts'
 import { __resetRouteCacheForTests } from '../app/data/routes.ts'
+import { __resetTrackCacheForTests } from '../app/data/tracks.ts'
 
 // Stub the global fetch so we don't actually hit OpenSky or adsbdb
 // during tests. Routes requests by URL host.
@@ -23,8 +24,20 @@ const ADSBDB_CALLSIGN_BODY = JSON.stringify({
   response: {
     flightroute: {
       callsign: 'DLH441',
-      origin: { iata_code: 'IAH', icao_code: 'KIAH', name: 'George Bush Intercontinental' },
-      destination: { iata_code: 'FRA', icao_code: 'EDDF', name: 'Frankfurt am Main' },
+      origin: {
+        iata_code: 'IAH',
+        icao_code: 'KIAH',
+        name: 'George Bush Intercontinental',
+        latitude: 29.9844,
+        longitude: -95.3414,
+      },
+      destination: {
+        iata_code: 'FRA',
+        icao_code: 'EDDF',
+        name: 'Frankfurt am Main',
+        latitude: 50.0379,
+        longitude: 8.5622,
+      },
     },
   },
 })
@@ -42,22 +55,42 @@ const ADSBDB_AIRCRAFT_BODY = JSON.stringify({
   },
 })
 
+// Default track start near Houston (IAH) — matches adsbdb's DLH441
+// origin above, so the cross-check passes and the route renders.
+const OPENSKY_TRACK_BODY = JSON.stringify({
+  icao24: 'abc123',
+  callsign: 'DLH441  ',
+  startTime: 1700000000,
+  endTime: 1700001000,
+  path: [[1700000000, 29.99, -95.34, 300, 0, false]],
+})
+
+// Overridable per-test. Default is "trajectory matches adsbdb origin".
+let trackBody = OPENSKY_TRACK_BODY
+
 beforeEach(() => {
   originalFetch = globalThis.fetch
   lastUrl = null
+  trackBody = OPENSKY_TRACK_BODY
   __resetCacheForTests()
   __resetRouteCacheForTests()
   __resetAircraftCacheForTests()
+  __resetTrackCacheForTests()
   globalThis.fetch = (async (input: Request | URL | string) => {
     let urlStr = typeof input === 'string' ? input : input.toString()
     lastUrl = urlStr
+    if (urlStr.includes('opensky-network.org/api/tracks/all')) {
+      return new Response(trackBody, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     if (urlStr.includes('opensky-network.org')) {
       return new Response(OPENSKY_BODY, {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    // Route two different adsbdb endpoints: /v0/callsign/* and /v0/aircraft/*
     if (urlStr.includes('adsbdb.com/v0/callsign/')) {
       return new Response(ADSBDB_CALLSIGN_BODY, {
         status: 200,
@@ -79,6 +112,7 @@ afterEach(() => {
   __resetCacheForTests()
   __resetRouteCacheForTests()
   __resetAircraftCacheForTests()
+  __resetTrackCacheForTests()
 })
 
 describe('router', () => {
@@ -115,6 +149,41 @@ describe('router', () => {
     assert.match(html, /stat-label[^>]*>DIST</)
     // Inline Settings link next to the Track link.
     assert.match(html, /class="panel-link settings-inline-link"/)
+  })
+
+  it('drops a stale adsbdb route when the OpenSky track starts far from adsbdb origin', async () => {
+    // Regression for IBE07YW: adsbdb returned MAD→VIE but today
+    // the plane was actually flying HAM→MAD. With the track
+    // starting near Hamburg (~8000 km from IAH), the cross-check
+    // must drop the route so we don't show wrong info.
+    trackBody = JSON.stringify({
+      icao24: 'abc123',
+      callsign: 'DLH441  ',
+      startTime: 1700000000,
+      endTime: 1700001000,
+      path: [[1700000000, 53.6304, 9.9882, 300, 0, false]], // HAM
+    })
+    let res = await router.fetch('http://localhost/?lat=53.5511&lon=9.9937')
+    assert.equal(res.status, 200)
+    let html = await res.text()
+    // FLIGHT still renders — we have a callsign.
+    assert.match(html, /DLH441/)
+    // ROUTE stat is gone because adsbdb's origin (IAH) doesn't
+    // match the track start (HAM).
+    assert.doesNotMatch(html, /stat-label[^>]*>ROUTE</)
+    // No adsbdb airport codes should appear in the panel.
+    assert.doesNotMatch(html, /stat-value[^>]*>IAH</)
+  })
+
+  it('keeps the route when OpenSky /tracks is unreachable (graceful fallback)', async () => {
+    // If the tracks endpoint errors out we should degrade to
+    // "trust adsbdb as-is", not lose the route entirely.
+    trackBody = 'nope' // will fail JSON parse → null track → pass-through
+    let res = await router.fetch('http://localhost/?lat=53.5511&lon=9.9937')
+    let html = await res.text()
+    assert.match(html, /DLH441/)
+    assert.match(html, /stat-label[^>]*>ROUTE</)
+    assert.match(html, /IAH/)
   })
 
   it('GET /?denied=1 renders the denied banner with Hamburg fallback', async () => {

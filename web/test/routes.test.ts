@@ -5,10 +5,12 @@ import {
   __resetRouteCacheForTests,
   getRoute,
   parseAdsbdbRoute,
+  verifyRouteAgainstTrack,
+  type RouteInfo,
 } from '../app/data/routes.ts'
 
 describe('parseAdsbdbRoute', () => {
-  it('extracts iata/icao/name from a real adsbdb response shape', () => {
+  it('extracts iata/icao/name/latlon from a real adsbdb response shape', () => {
     let json = {
       response: {
         flightroute: {
@@ -17,11 +19,15 @@ describe('parseAdsbdbRoute', () => {
             iata_code: 'iah',
             icao_code: 'kiah',
             name: 'George Bush Intercontinental',
+            latitude: 29.9844,
+            longitude: -95.3414,
           },
           destination: {
             iata_code: 'fra',
             icao_code: 'eddf',
             name: 'Frankfurt am Main',
+            latitude: 50.0379,
+            longitude: 8.5622,
           },
         },
       },
@@ -31,8 +37,24 @@ describe('parseAdsbdbRoute', () => {
     assert.equal(r!.originIata, 'IAH')
     assert.equal(r!.originIcao, 'KIAH')
     assert.equal(r!.originName, 'George Bush Intercontinental')
+    assert.equal(r!.originLat, 29.9844)
+    assert.equal(r!.originLon, -95.3414)
     assert.equal(r!.destinationIata, 'FRA')
     assert.equal(r!.destinationIcao, 'EDDF')
+  })
+
+  it('stores originLat/Lon as null when adsbdb omits them', () => {
+    let json = {
+      response: {
+        flightroute: {
+          origin: { iata_code: 'AAA', icao_code: 'AAAA' },
+          destination: { iata_code: 'BBB', icao_code: 'BBBB' },
+        },
+      },
+    }
+    let r = parseAdsbdbRoute(json)
+    assert.equal(r?.originLat, null)
+    assert.equal(r?.originLon, null)
   })
 
   it('returns null on missing fields', () => {
@@ -46,6 +68,51 @@ describe('parseAdsbdbRoute', () => {
       }),
       null,
     )
+  })
+})
+
+describe('verifyRouteAgainstTrack', () => {
+  function mkRoute(lat: number | null, lon: number | null): RouteInfo {
+    return {
+      originIata: 'MAD',
+      originIcao: 'LEMD',
+      originName: 'Madrid',
+      originLat: lat,
+      originLon: lon,
+      destinationIata: 'VIE',
+      destinationIcao: 'LOWW',
+      destinationName: 'Vienna',
+    }
+  }
+
+  it('passes through the route when origin matches the track start (< 150 km)', () => {
+    // Both near Madrid airport — 3 km apart.
+    let route = mkRoute(40.471926, -3.56264)
+    let track = { lat: 40.5, lon: -3.58, startTime: 1 }
+    assert.equal(verifyRouteAgainstTrack(route, track), route)
+  })
+
+  it('drops the route when origin and track start are far apart (IBE07YW bug)', () => {
+    // adsbdb says MAD; actual track started at HAM (~1500 km away).
+    let route = mkRoute(40.471926, -3.56264)
+    let track = { lat: 53.6304, lon: 9.9882, startTime: 1 } // HAM
+    assert.equal(verifyRouteAgainstTrack(route, track), null)
+  })
+
+  it('passes through when no track data is available (graceful fallback)', () => {
+    let route = mkRoute(40.471926, -3.56264)
+    assert.equal(verifyRouteAgainstTrack(route, null), route)
+  })
+
+  it('passes through when adsbdb did not return origin coordinates', () => {
+    let route = mkRoute(null, null)
+    let track = { lat: 53.6304, lon: 9.9882, startTime: 1 }
+    assert.equal(verifyRouteAgainstTrack(route, track), route)
+  })
+
+  it('returns null when no route was found (nothing to verify)', () => {
+    let track = { lat: 40.5, lon: -3.58, startTime: 1 }
+    assert.equal(verifyRouteAgainstTrack(null, track), null)
   })
 })
 

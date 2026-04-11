@@ -7,15 +7,29 @@
 // vs 3/4 on hexdb.io). The response is cached by normalised callsign
 // because routes don't change mid-flight.
 
+import { haversineKm } from './geo.ts'
+import type { TrackStart } from './tracks.ts'
+
 const ADSBDB_URL = 'https://api.adsbdb.com/v0/callsign/'
 const FETCH_TIMEOUT_MS = 3_000
 const CACHE_TTL_MS = 60 * 60 * 1_000 // 1 hour
 const CACHE_MAX_ENTRIES = 500
 
+// Cross-check threshold between adsbdb's claimed origin and the
+// first waypoint of OpenSky's /tracks/all trajectory. Big enough
+// to absorb taxi + initial climb + ADS-B coverage gaps (typically
+// < 50 km), small enough to catch "wrong route entirely" drift
+// (typically 500+ km when adsbdb's schedule is stale).
+const ROUTE_MISMATCH_THRESHOLD_KM = 150
+
 export interface RouteInfo {
   originIata: string
   originIcao: string
   originName: string
+  /** Lat of the origin airport (from adsbdb). Used to cross-check
+   * the route against OpenSky's /tracks/all trajectory data. */
+  originLat: number | null
+  originLon: number | null
   destinationIata: string
   destinationIcao: string
   destinationName: string
@@ -67,6 +81,8 @@ export function parseAdsbdbRoute(json: unknown): RouteInfo | null {
   let oIata = (origin as { iata_code?: unknown }).iata_code
   let oIcao = (origin as { icao_code?: unknown }).icao_code
   let oName = (origin as { name?: unknown }).name
+  let oLat = (origin as { latitude?: unknown }).latitude
+  let oLon = (origin as { longitude?: unknown }).longitude
   let dIata = (destination as { iata_code?: unknown }).iata_code
   let dIcao = (destination as { icao_code?: unknown }).icao_code
   let dName = (destination as { name?: unknown }).name
@@ -84,6 +100,8 @@ export function parseAdsbdbRoute(json: unknown): RouteInfo | null {
     originIata: oIata.toUpperCase(),
     originIcao: oIcao.toUpperCase(),
     originName: typeof oName === 'string' ? oName : '',
+    originLat: typeof oLat === 'number' ? oLat : null,
+    originLon: typeof oLon === 'number' ? oLon : null,
     destinationIata: dIata.toUpperCase(),
     destinationIcao: dIcao.toUpperCase(),
     destinationName: typeof dName === 'string' ? dName : '',
@@ -126,6 +144,29 @@ export async function getRoute(callsign: string): Promise<RouteInfo | null> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+// Cross-check a route from adsbdb against OpenSky's actual
+// ADS-B trajectory. adsbdb's DB is schedule-based, so when
+// airlines reuse a callsign for a different route today, adsbdb
+// happily returns yesterday's schedule. If /tracks/all's first
+// waypoint is far from adsbdb's claimed origin airport, we
+// don't trust the route and drop it (the callsign still renders).
+//
+// Degrades gracefully:
+// - No route → nothing to verify.
+// - No track (OpenSky unreachable, rate-limited, or no track for
+//   this icao24) → trust adsbdb as-is.
+// - adsbdb didn't include origin coordinates → trust adsbdb.
+export function verifyRouteAgainstTrack(
+  route: RouteInfo | null,
+  track: TrackStart | null,
+): RouteInfo | null {
+  if (!route) return route
+  if (!track) return route
+  if (route.originLat === null || route.originLon === null) return route
+  let d = haversineKm(route.originLat, route.originLon, track.lat, track.lon)
+  return d <= ROUTE_MISMATCH_THRESHOLD_KM ? route : null
 }
 
 export function __resetRouteCacheForTests() {
