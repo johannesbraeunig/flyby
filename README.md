@@ -32,7 +32,7 @@ See [docs/hardware.md](docs/hardware.md) for the full wiring diagram and pin map
 - [`ArduinoJson`](https://arduinojson.org/) — streaming JSON parser
 - [`WiFiManager`](https://github.com/tzapu/WiFiManager) — captive-portal setup
 
-See [docs/architecture.md](docs/architecture.md) for the runtime design.
+See [docs/architecture.md](docs/architecture.md) for the runtime design and [docs/development.md](docs/development.md) for the dev workflow (Wokwi simulator, CLI debugging, gotchas).
 
 ## Getting started
 

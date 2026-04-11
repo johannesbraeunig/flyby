@@ -41,14 +41,14 @@ This maps cleanly to common ESP32-WROOM-32 boards and avoids the strapping pins 
 | A   | 23 |
 | B   | 19 |
 | C   | 5  |
-| D   | 17 |
+| D   | 21 |
 | E   | 18 |
 | LAT | 4  |
 | OE  | 15 |
-| CLK | 16 |
+| CLK | 22 |
 | GND | GND (multiple) |
 
-> GPIO 2 is a strapping pin — avoid it for HUB75. GPIO 0 is BOOT and also a strapping pin. GPIO 6–11 are reserved for flash.
+> GPIO 2 is a strapping pin — avoid it for HUB75. GPIO 0 is BOOT and also a strapping pin. GPIO 6–11 are reserved for flash. GPIO 16/17 are not exposed on the Wokwi `wokwi-esp32-devkit-v1` part, so we route `D` and `CLK` via GPIO 21/22 instead — this keeps a single pin map valid for both real hardware and the simulator.
 
 ## Power
 
