@@ -195,6 +195,33 @@ function PixelVerticalArrow() {
   }
 }
 
+// 5×5 dot-matrix degree glyph — a ring with cut corners so it reads
+// as round at a glance instead of as a solid square. Jersey 10 has
+// no `°` character so a bare `°` renders from a serify fallback
+// font; this SVG keeps the elevation angle reading in the pixel
+// aesthetic.
+//
+//   row 0: . X X X .   ← top arc
+//   row 1: X . . . X
+//   row 2: X . . . X
+//   row 3: X . . . X
+//   row 4: . X X X .   ← bottom arc
+function PixelDegree() {
+  return () => (
+    <svg
+      class="pixel-arrow pixel-degree"
+      viewBox="0 0 5 5"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="1" y="0" width="3" height="1" />
+      <rect x="0" y="1" width="1" height="3" />
+      <rect x="4" y="1" width="1" height="3" />
+      <rect x="1" y="4" width="3" height="1" />
+    </svg>
+  )
+}
+
 // Vertical-rate threshold: OpenSky reports noisy values near zero
 // for planes in level flight. Anything under 1 m/s (~200 fpm) is
 // treated as "level" and gets no arrow.
@@ -242,9 +269,9 @@ function PanelOk() {
     // 250 km the curvature error is < 1°.
     let bearing = bearingDeg(observer.lat, observer.lon, plane.lat, plane.lon)
     let elevation = plane.altMeters !== null ? elevationDeg(plane.altMeters, plane.distanceKm) : null
-    let lookValue =
+    let lookText =
       elevation !== null
-        ? `${compass8(bearing)} ${Math.round(elevation)}°`
+        ? `${compass8(bearing)} ${Math.round(elevation)}`
         : compass8(bearing)
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
@@ -302,7 +329,10 @@ function PanelOk() {
           </span>
           <span class="stat">
             <span class="stat-label">LOOK</span>
-            <span class="stat-value">{lookValue}</span>
+            <span class="stat-value">
+              {lookText}
+              {elevation !== null ? <PixelDegree /> : null}
+            </span>
           </span>
         </div>
         {aircraft?.icaoType ? (
