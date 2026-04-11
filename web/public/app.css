@@ -100,16 +100,16 @@ body {
 }
 
 .panel-line-1 {
-  font-size: clamp(3.5rem, 13vw, 12rem);
+  font-size: clamp(4rem, 15vw, 13rem);
 }
 
 .panel-line-2 {
-  font-size: clamp(2.5rem, 8.5vw, 7.5rem);
+  font-size: clamp(2.75rem, 10vw, 9rem);
   color: var(--led-amber-soft);
 }
 
 .panel-line-3 {
-  font-size: clamp(2rem, 7vw, 6rem);
+  font-size: clamp(2.25rem, 8vw, 7rem);
   color: var(--led-amber-soft);
   opacity: 0.92;
 }
@@ -135,11 +135,11 @@ body {
 
 /* Line 2 stat values are larger than line 3's — line 2 is the
    main ID (callsign + route), line 3 is the secondary numeric.
-   The value is capped more conservatively than line 1 so two
-   stats (FLIGHT + ROUTE) fit side-by-side on typical desktop
-   widths; on phones they wrap instead of getting clipped. */
+   Two stats (FLIGHT + ROUTE) should fit side-by-side on typical
+   desktop widths; on phones they wrap (flex-wrap on .panel-stats)
+   instead of getting clipped by the body's overflow:hidden. */
 .panel-line-2 .stat-value {
-  font-size: clamp(2.5rem, 8.5vw, 7.5rem);
+  font-size: clamp(2.75rem, 10vw, 9rem);
 }
 
 .stat {
@@ -161,7 +161,7 @@ body {
 
 .stat-value {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 7vw, 6rem);
+  font-size: clamp(2.25rem, 8vw, 7rem);
   color: var(--led-amber-soft);
   line-height: 0.85;
   /* Expressed in the value's own em (the large one), so the gap
