@@ -291,14 +291,14 @@ body {
 }
 
 /* Pixel degree glyph — a 5×5 hollow ring that replaces the `°`
-   character on the LOOK stat. Floated high (superscript-style)
+   character on the LOOK stat. Sits as a high-shoulder annotation
+   next to the preceding digit (not floating above the cap-height)
    and small enough to read as an indicator mark rather than a
-   digit. Minimal left margin so it sits tight against the
-   preceding number. */
+   digit. Minimal left margin so it sits tight. */
 .pixel-degree {
   width: 0.2em;
   height: 0.2em;
-  vertical-align: 0.55em;
+  vertical-align: 0.4em;
   margin-left: 0.02em;
 }
 

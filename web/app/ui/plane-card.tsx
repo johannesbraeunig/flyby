@@ -269,9 +269,13 @@ function PanelOk() {
     // 250 km the curvature error is < 1°.
     let bearing = bearingDeg(observer.lat, observer.lon, plane.lat, plane.lon)
     let elevation = plane.altMeters !== null ? elevationDeg(plane.altMeters, plane.distanceKm) : null
+    // No space between compass direction and elevation — on the
+    // dot-matrix panel it reads as a single compact token like
+    // "SW34°" without being ambiguous (compass codes are always
+    // 1–2 uppercase letters, elevation is 1–2 digits).
     let lookText =
       elevation !== null
-        ? `${compass8(bearing)} ${Math.round(elevation)}`
+        ? `${compass8(bearing)}${Math.round(elevation)}`
         : compass8(bearing)
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
