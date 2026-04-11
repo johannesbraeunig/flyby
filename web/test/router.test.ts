@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 import { router } from '../app/router.ts'
 import { __resetAircraftCacheForTests } from '../app/data/aircraft.ts'
 import { __resetCacheForTests } from '../app/data/opensky.ts'
+import { __resetOpenskyAuthForTests } from '../app/data/opensky-auth.ts'
 import { __resetRouteCacheForTests } from '../app/data/routes.ts'
 import { __resetTrackCacheForTests } from '../app/data/tracks.ts'
 import { __resetRateLimitForTests } from '../app/utils/rate-limit.ts'
@@ -88,6 +89,12 @@ beforeEach(() => {
   __resetAircraftCacheForTests()
   __resetTrackCacheForTests()
   __resetRateLimitForTests()
+  __resetOpenskyAuthForTests()
+  // Router tests run without OpenSky credentials so we exercise
+  // the anonymous path. The opensky-auth helper bails out
+  // immediately when these are unset and sends no token request.
+  delete process.env.OPENSKY_CLIENT_ID
+  delete process.env.OPENSKY_CLIENT_SECRET
   globalThis.fetch = (async (input: Request | URL | string) => {
     let urlStr = typeof input === 'string' ? input : input.toString()
     lastUrl = urlStr
@@ -126,6 +133,12 @@ afterEach(() => {
   __resetAircraftCacheForTests()
   __resetTrackCacheForTests()
   __resetRateLimitForTests()
+  __resetOpenskyAuthForTests()
+  // Router tests run without OpenSky credentials so we exercise
+  // the anonymous path. The opensky-auth helper bails out
+  // immediately when these are unset and sends no token request.
+  delete process.env.OPENSKY_CLIENT_ID
+  delete process.env.OPENSKY_CLIENT_SECRET
 })
 
 describe('router', () => {

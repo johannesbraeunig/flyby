@@ -11,6 +11,7 @@
 
 import { fetchBoundedJson } from '../utils/fetch-json.ts'
 import { bboxFor, haversineKm, type BBox } from './geo.ts'
+import { invalidateToken, openskyAuthHeader } from './opensky-auth.ts'
 
 const OPENSKY_URL = 'https://opensky-network.org/api/states/all'
 const FETCH_TIMEOUT_MS = 8_000
@@ -145,6 +146,9 @@ export function rankByDistance(
 
 // Fetch states from OpenSky for the given bbox. Throws on network error
 // or non-2xx HTTP; the caller's try/catch handles all failure modes.
+// Transparently retries once if a cached OAuth2 token was rejected
+// (401) — that usually means the server-side token lifetime ended
+// slightly before our safety margin expected.
 async function fetchStates(bbox: BBox, signal: AbortSignal): Promise<unknown> {
   let url = new URL(OPENSKY_URL)
   url.searchParams.set('lamin', bbox.lamin.toFixed(4))
@@ -152,10 +156,22 @@ async function fetchStates(bbox: BBox, signal: AbortSignal): Promise<unknown> {
   url.searchParams.set('lamax', bbox.lamax.toFixed(4))
   url.searchParams.set('lomax', bbox.lomax.toFixed(4))
 
-  let result = await fetchBoundedJson(url.toString(), {
-    signal,
-    maxBytes: MAX_BODY_BYTES,
-  })
+  let doFetch = async () => {
+    let authHeaders = await openskyAuthHeader()
+    return fetchBoundedJson(url.toString(), {
+      signal,
+      maxBytes: MAX_BODY_BYTES,
+      headers: authHeaders,
+    })
+  }
+
+  let result = await doFetch()
+
+  // If our cached token was rejected, invalidate and retry once.
+  if (result.status === 401) {
+    invalidateToken()
+    result = await doFetch()
+  }
 
   if (result.ok) return result.json
 

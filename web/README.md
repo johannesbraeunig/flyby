@@ -14,25 +14,52 @@ primitives (`fetch-router`, `route-pattern`, `component`, `node-fetch-server`,
 ```sh
 cd web
 pnpm install
+cp .env.example .env   # optional; add OpenSky credentials — see below
 pnpm dev
 ```
 
 Then open <http://localhost:44100>.
 
-The first visit prompts for browser geolocation. If you allow it, the page
-redirects to `/?lat=…&lon=…` and the server starts asking OpenSky Network
-for nearby aircraft. If you deny it, the page falls back to **Hamburg
-(53.5511, 9.9937)** — the same default the firmware uses.
+On first visit the locating page asks you to pick a location (your
+browser's geolocation, or Hamburg as a default). From there the panel
+shows the nearest airborne aircraft and refreshes every 30 s via a small
+client-side poll against `/api/nearest`. Polling pauses when the tab is
+hidden and resumes on focus.
 
-The plane card refreshes every 30 s via a small client-side poll against
-`/api/nearest` (no full page reload, no meta refresh). Polling pauses when
-the tab is hidden and resumes on focus.
+## OpenSky credentials
+
+FlyBy works without credentials — it falls back to OpenSky's anonymous
+access — but the anonymous limits (~10 s minimum spacing on
+`/states/all`, ~400 credits/day on `/tracks/all`) aren't really enough
+for an always-on display. For a reliable setup:
+
+1. Sign up at <https://opensky-network.org/index.php?option=com_users&view=registration>.
+2. Create an API client at **My OpenSky → API Clients** to get a
+   `client_id` and `client_secret`. OpenSky uses OAuth2 client
+   credentials exclusively (HTTP Basic was deprecated).
+3. **Local dev**: put them in `web/.env` (gitignored):
+    ```
+    OPENSKY_CLIENT_ID=...
+    OPENSKY_CLIENT_SECRET=...
+    ```
+    Node's `--env-file-if-exists=.env` flag in the `dev` script picks
+    them up automatically; no dotenv package needed.
+4. **Production (Fly.io)**:
+    ```sh
+    fly secrets set OPENSKY_CLIENT_ID=... OPENSKY_CLIENT_SECRET=...
+    ```
+    Fly injects these into the container as env vars at runtime.
+
+The auth module (`app/data/opensky-auth.ts`) handles the token dance:
+POSTs the credentials once, caches the access token until ~60 s before
+expiry, transparently re-fetches on 401, and falls back silently to
+anonymous if the token endpoint is unreachable.
 
 ## Scripts
 
 | Command            | What it does                                            |
 | ------------------ | ------------------------------------------------------- |
-| `pnpm dev`         | `tsx watch server.ts` on port 44100, with logger middleware |
+| `pnpm dev`         | `node --watch --env-file-if-exists=.env --import tsx server.ts` on port 44100 |
 | `pnpm start`       | Same, no watch; defaults to `PORT=3000` for container runtimes |
 | `pnpm test`        | `node:test` via `tsx --test` — pure logic + router      |
 | `pnpm typecheck`   | `tsc --noEmit`                                          |

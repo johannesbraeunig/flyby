@@ -18,6 +18,7 @@
 // budget for FlyBy's 30 s polling cadence.
 
 import { fetchBoundedJson } from '../utils/fetch-json.ts'
+import { invalidateToken, openskyAuthHeader } from './opensky-auth.ts'
 
 const TRACKS_URL = 'https://opensky-network.org/api/tracks/all'
 const FETCH_TIMEOUT_MS = 4_000
@@ -96,10 +97,23 @@ export async function getTrackStart(icao24: string): Promise<TrackStart | null> 
     let url = new URL(TRACKS_URL)
     url.searchParams.set('icao24', key)
     url.searchParams.set('time', '0')
-    let result = await fetchBoundedJson(url.toString(), {
-      signal: controller.signal,
-      maxBytes: MAX_BODY_BYTES,
-    })
+
+    let doFetch = async () => {
+      let authHeaders = await openskyAuthHeader()
+      return fetchBoundedJson(url.toString(), {
+        signal: controller.signal,
+        maxBytes: MAX_BODY_BYTES,
+        headers: authHeaders,
+      })
+    }
+
+    let result = await doFetch()
+    if (result.status === 401) {
+      // Cached token was rejected — invalidate and retry once.
+      invalidateToken()
+      result = await doFetch()
+    }
+
     if (!result.ok) {
       // HTTP error / too-large / parse error. Includes 404 ("no
       // track for this aircraft"), 429 (rate limited), 5xx, and
