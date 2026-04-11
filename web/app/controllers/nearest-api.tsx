@@ -1,6 +1,7 @@
 import type { BuildAction } from 'remix/fetch-router'
 
 import { getNearestAircraft } from '../data/opensky.ts'
+import { getRoute } from '../data/routes.ts'
 import { resolveLocation } from '../data/location.ts'
 import { routes } from '../routes.ts'
 import { PlaneCard } from '../ui/plane-card.tsx'
@@ -17,7 +18,11 @@ export let nearestApi: BuildAction<'GET', typeof routes.nearestApi> = {
       return new Response('missing lat/lon', { status: 400 })
     }
     let result = await getNearestAircraft(location.lat, location.lon, location.radiusKm)
-    return render(<PlaneCard result={result} />, {
+    let route = null
+    if ((result.kind === 'ok' || result.kind === 'ok-stale') && result.plane.callsign) {
+      route = await getRoute(result.plane.callsign)
+    }
+    return render(<PlaneCard result={result} route={route} />, {
       headers: { 'Cache-Control': 'no-store' },
     })
   },
