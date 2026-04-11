@@ -87,21 +87,6 @@ export function PlaneCard() {
       <>
         {panelNode}
         <p class="panel-links">
-          {track ? (
-            <>
-              <a
-                class="panel-link"
-                href={liveMapUrl(track.icao24)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Track {track.label} ↗
-              </a>
-              <span class="panel-link-sep" aria-hidden="true">
-                |
-              </span>
-            </>
-          ) : null}
           <label for="settings-toggle" class="panel-link settings-inline-link">
             Settings
           </label>
@@ -111,6 +96,21 @@ export function PlaneCard() {
           <button type="button" id="fullscreen-btn" class="panel-link panel-link-btn">
             Fullscreen
           </button>
+          {track ? (
+            <>
+              <span class="panel-link-sep" aria-hidden="true">
+                |
+              </span>
+              <a
+                class="panel-link"
+                href={liveMapUrl(track.icao24)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Track {track.label} ↗
+              </a>
+            </>
+          ) : null}
         </p>
       </>
     )
