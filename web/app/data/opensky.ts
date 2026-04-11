@@ -33,6 +33,9 @@ export interface Plane {
   altMeters: number | null
   velocityMps: number | null
   trackDeg: number | null
+  /** Vertical rate in m/s. Positive = climbing, negative = descending,
+   * null = unknown. Used to show an up/down arrow next to altitude. */
+  verticalRateMps: number | null
   onGround: boolean
   originCountry: string
   distanceKm: number
@@ -123,6 +126,7 @@ export function parseStates(json: unknown): PlanePosition[] {
       altMeters,
       velocityMps: typeof row[9] === 'number' ? row[9] : null,
       trackDeg: typeof row[10] === 'number' ? row[10] : null,
+      verticalRateMps: typeof row[11] === 'number' ? row[11] : null,
       onGround: false,
       originCountry: typeof row[2] === 'string' ? row[2] : '',
     })

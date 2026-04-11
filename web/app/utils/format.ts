@@ -36,6 +36,18 @@ export function formatSpeedKmh(velMps: number | null): string {
   return `${Math.round(velMps * 3.6)}KM/H`
 }
 
+// Eight-point compass direction from a bearing in degrees [0, 360).
+// 0° → N, 45° → NE, 90° → E, etc. Bearings are snapped to the
+// nearest 45° boundary.
+const COMPASS_8 = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const
+
+export function compass8(deg: number): string {
+  if (!Number.isFinite(deg)) return '?'
+  let normalized = ((deg % 360) + 360) % 360
+  let idx = Math.round(normalized / 45) % 8
+  return COMPASS_8[idx] ?? 'N'
+}
+
 export function formatDistance(km: number): string {
   if (!Number.isFinite(km)) return '?'
   if (km < 10) return `${km.toFixed(1)} km`

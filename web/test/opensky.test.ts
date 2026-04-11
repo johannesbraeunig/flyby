@@ -54,7 +54,17 @@ describe('parseStates', () => {
     assert.equal(p.lon, 9.9937)
     assert.equal(p.altMeters, 11000)
     assert.equal(p.velocityMps, 240)
+    assert.equal(p.verticalRateMps, 0)
     assert.equal(p.onGround, false)
+  })
+
+  it('extracts vertical_rate from row[11]', () => {
+    let climbing = parseStates({ states: [row({ 11: 8.5 })] })[0]!
+    assert.equal(climbing.verticalRateMps, 8.5)
+    let descending = parseStates({ states: [row({ 11: -5 })] })[0]!
+    assert.equal(descending.verticalRateMps, -5)
+    let missing = parseStates({ states: [row({ 11: null })] })[0]!
+    assert.equal(missing.verticalRateMps, null)
   })
 
   it('skips on-ground aircraft', () => {

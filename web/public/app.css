@@ -99,6 +99,43 @@ body {
   position: relative;
   width: fit-content;
   max-width: 100%;
+  overflow: hidden;
+}
+
+/* CRT scanline overlay — sells the "this is a physical display"
+   illusion that the dot-grid background started. A repeating
+   2px-transparent / 1px-dark stripe pattern layered above the
+   panel content, with a very subtle slow drift so it feels
+   alive. Kept at ~18% opacity so it never competes with the
+   text. prefers-reduced-motion disables the drift animation. */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 2px,
+    rgba(0, 0, 0, 0.18) 3px
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel::before {
+    animation: scanline-drift 6s linear infinite;
+  }
+}
+
+@keyframes scanline-drift {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: 3px;
+  }
 }
 
 .panel-line {
@@ -222,9 +259,8 @@ body {
    uses currentColor and inherits the amber glow via drop-shadow.
    crispEdges keeps the pixels hard. Aspect 9:5; kept narrow so it
    reads as a separator, not a dominant glyph.
-   - `vertical-align: 0.17em` sits slightly above the text midline;
-     plain `middle` read too low next to Jersey 10's tall caps and
-     `0.2em` was a touch too high.
+   - `vertical-align: 0.15em` sits slightly above the text midline;
+     plain `middle` read too low next to Jersey 10's tall caps.
    - margin asymmetric: the left side is ~1 pixel-unit (0.048em,
      one dot in the 9-wide SVG grid) tighter than the right, so
      the arrow hugs the "origin" airport on the left more than the
@@ -238,6 +274,17 @@ body {
   fill: currentColor;
   shape-rendering: crispEdges;
   filter: drop-shadow(0 0 8px var(--led-glow)) drop-shadow(0 0 2px var(--led-glow));
+}
+
+/* Vertical-rate arrow sits next to the altitude value on line 3.
+   It's a 5×7 portrait-aspect SVG (override the horizontal arrow's
+   dimensions) with the same glow + crispEdges styling. Symmetric
+   margins since it's not acting as a separator. */
+.pixel-arrow-vert {
+  width: 0.4em;
+  height: 0.56em;
+  vertical-align: -0.1em;
+  margin: 0 0.05em 0 0.15em;
 }
 
 /* Map link + inline Settings link row, sitting immediately under

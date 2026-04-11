@@ -1,7 +1,7 @@
 import * as assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { bboxFor, haversineKm } from '../app/data/geo.ts'
+import { bboxFor, bearingDeg, elevationDeg, haversineKm } from '../app/data/geo.ts'
 
 describe('haversineKm', () => {
   it('returns 0 for identical points', () => {
@@ -48,5 +48,57 @@ describe('bboxFor', () => {
     let b2 = bboxFor(0, -179, 500)
     assert.ok(b2.lomin >= -180, `lomin ${b2.lomin} must be ≥ -180`)
     assert.ok(b2.lomax <= 180)
+  })
+})
+
+describe('bearingDeg', () => {
+  it('returns ~0° (N) for a target directly north', () => {
+    let b = bearingDeg(50, 10, 51, 10)
+    assert.ok(Math.abs(b - 0) < 0.5, `got ${b}`)
+  })
+
+  it('returns ~90° (E) for a target due east', () => {
+    let b = bearingDeg(50, 10, 50, 11)
+    assert.ok(Math.abs(b - 90) < 1, `got ${b}`)
+  })
+
+  it('returns ~180° (S) for a target due south', () => {
+    let b = bearingDeg(50, 10, 49, 10)
+    assert.ok(Math.abs(b - 180) < 0.5, `got ${b}`)
+  })
+
+  it('returns ~270° (W) for a target due west', () => {
+    let b = bearingDeg(50, 10, 50, 9)
+    assert.ok(Math.abs(b - 270) < 1, `got ${b}`)
+  })
+
+  it('always returns a value in [0, 360)', () => {
+    // Targets on the other side of the antimeridian.
+    for (let lon of [-179, 179, -10, 10, 0]) {
+      let b = bearingDeg(0, 0, 0.1, lon)
+      assert.ok(b >= 0 && b < 360, `got ${b} for lon=${lon}`)
+    }
+  })
+})
+
+describe('elevationDeg', () => {
+  it('returns 90° for a plane directly overhead (distance 0)', () => {
+    assert.equal(elevationDeg(10000, 0), 90)
+  })
+
+  it('returns 45° when altitude equals horizontal distance', () => {
+    // 10 km altitude, 10 km ground distance → 45°
+    let e = elevationDeg(10000, 10)
+    assert.ok(Math.abs(e - 45) < 0.1, `got ${e}`)
+  })
+
+  it('returns ~0° for distant cruise altitude', () => {
+    // 10 km altitude, 200 km ground → atan(10/200) ≈ 2.86°
+    let e = elevationDeg(10000, 200)
+    assert.ok(Math.abs(e - 2.86) < 0.1, `got ${e}`)
+  })
+
+  it('returns 0° for a plane at ground level', () => {
+    assert.equal(elevationDeg(0, 50), 0)
   })
 })

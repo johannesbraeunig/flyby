@@ -46,3 +46,40 @@ export function bboxFor(lat: number, lon: number, radiusKm: number): BBox {
     lomax: Math.min(180, lon + dLon),
   }
 }
+
+// Initial bearing (forward azimuth) from (lat1, lon1) to (lat2, lon2),
+// in degrees clockwise from true north in [0, 360). This is the
+// compass direction a spotter would look to find the target.
+//
+// Standard great-circle formula:
+//   y = sin(Δλ) · cos(φ₂)
+//   x = cos(φ₁) · sin(φ₂) − sin(φ₁) · cos(φ₂) · cos(Δλ)
+//   θ = atan2(y, x)
+export function bearingDeg(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  let φ1 = lat1 * DEG_TO_RAD
+  let φ2 = lat2 * DEG_TO_RAD
+  let dLon = (lon2 - lon1) * DEG_TO_RAD
+  let y = Math.sin(dLon) * Math.cos(φ2)
+  let x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLon)
+  let deg = (Math.atan2(y, x) * 180) / Math.PI
+  return (deg + 360) % 360
+}
+
+// Elevation angle above the horizon in degrees [0, 90] for a plane at
+// `altMeters` above ground and `distanceKm` great-circle distance from
+// the observer. Flat-earth approximation (ignores Earth curvature)
+// which is fine for the radii we care about — under 250 km the
+// curvature error is well below 1°.
+//
+//   elevation = atan(altMeters / distanceMeters)
+export function elevationDeg(altMeters: number, distanceKm: number): number {
+  let ground = distanceKm * 1000
+  if (ground <= 0) return 90
+  if (altMeters <= 0) return 0
+  return (Math.atan2(altMeters, ground) * 180) / Math.PI
+}

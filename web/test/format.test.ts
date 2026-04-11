@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  compass8,
   formatAltMeters,
   formatDistance,
   formatFlightLevel,
@@ -56,6 +57,36 @@ describe('formatSpeedKmh', () => {
   })
   it('handles missing speed', () => {
     assert.equal(formatSpeedKmh(null), '?')
+  })
+})
+
+describe('compass8', () => {
+  it('snaps exact 45° multiples to the matching direction', () => {
+    assert.equal(compass8(0), 'N')
+    assert.equal(compass8(45), 'NE')
+    assert.equal(compass8(90), 'E')
+    assert.equal(compass8(135), 'SE')
+    assert.equal(compass8(180), 'S')
+    assert.equal(compass8(225), 'SW')
+    assert.equal(compass8(270), 'W')
+    assert.equal(compass8(315), 'NW')
+  })
+  it('snaps to the nearest 45° bin', () => {
+    assert.equal(compass8(10), 'N')
+    assert.equal(compass8(22), 'N') // just below the 22.5° boundary
+    assert.equal(compass8(23), 'NE') // just above
+    assert.equal(compass8(44), 'NE')
+    assert.equal(compass8(200), 'S') // closer to 180 than 225
+    assert.equal(compass8(210), 'SW') // closer to 225 than 180
+    assert.equal(compass8(260), 'W')
+  })
+  it('wraps values ≥ 360 and handles negatives', () => {
+    assert.equal(compass8(360), 'N')
+    assert.equal(compass8(720), 'N')
+    assert.equal(compass8(-90), 'W')
+  })
+  it('handles non-finite input', () => {
+    assert.equal(compass8(NaN), '?')
   })
 })
 

@@ -18,7 +18,8 @@ const OPENSKY_BODY = JSON.stringify({
   time: 1700000000,
   states: [
     // [icao24, callsign, country, ts, ts, lon, lat, baro_alt, on_ground, vel, track, vrate, sensors, geo_alt, squawk, spi, src]
-    ['abc123', 'DLH441  ', 'Germany', 1700000000, 1700000000, 9.9937, 53.5511, 11000, false, 240, 180, 0, null, 11000, null, false, 0],
+    // vrate = 5 m/s → climbing, will render the ↑ arrow next to ALT.
+    ['abc123', 'DLH441  ', 'Germany', 1700000000, 1700000000, 9.9937, 53.5511, 11000, false, 240, 180, 5, null, 11000, null, false, 0],
   ],
 })
 
@@ -179,6 +180,10 @@ describe('router', () => {
     // And the parenthetical content shows up for ALT / SPD.
     assert.match(html, /ALT \(11000M\)/)
     assert.match(html, /SPD \(864KM\/H\)/)
+    // LOOK stat (bearing + elevation) renders.
+    assert.match(html, /stat-label[^>]*>LOOK\b/)
+    // The stub's vertical_rate = 5 m/s triggers the climbing arrow.
+    assert.match(html, /class="pixel-arrow pixel-arrow-vert"/)
     // Inline Settings link next to the Track link.
     assert.match(html, /class="panel-link settings-inline-link"/)
   })

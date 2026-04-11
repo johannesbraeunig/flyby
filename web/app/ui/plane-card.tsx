@@ -1,10 +1,12 @@
 import type { RemixNode } from 'remix/component'
 
 import type { AircraftInfo } from '../data/aircraft.ts'
+import { bearingDeg, elevationDeg } from '../data/geo.ts'
 import type { NearestResult, Plane } from '../data/opensky.ts'
 import type { RouteInfo } from '../data/routes.ts'
 import { lookupAirline } from '../data/airlines.ts'
 import {
+  compass8,
   formatAltMeters,
   formatDistance,
   formatDistanceCompact,
@@ -47,6 +49,7 @@ export function PlaneCard() {
       panelNode = (
         <PanelOk
           plane={result.plane}
+          observer={result.observed}
           route={route}
           aircraft={aircraft}
           stale={result.kind === 'ok-stale'}
@@ -155,15 +158,59 @@ function PixelArrow() {
   )
 }
 
+// Compact 5×7 dot-matrix up/down arrow for vertical-rate indication
+// next to the altitude readout. Same pixel-perfect style as the
+// horizontal route arrow — fills with currentColor and picks up the
+// amber drop-shadow.
+//
+// col:   0 1 2 3 4
+//   row 0: . . X . .   ← tip (up arrow)
+//   row 1: . X X X .
+//   row 2: X X X X X
+//   row 3: . . X . .
+//   row 4: . . X . .
+//   row 5: . . X . .
+//   row 6: . . X . .   ← bottom of shaft
+function PixelVerticalArrow() {
+  return ({ dir }: { dir: 'up' | 'down' }) => {
+    let flip = dir === 'down' ? 'rotate(180 2.5 3.5)' : undefined
+    return (
+      <svg
+        class="pixel-arrow pixel-arrow-vert"
+        viewBox="0 0 5 7"
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <g transform={flip}>
+          <rect x="2" y="0" width="1" height="1" />
+          <rect x="1" y="1" width="3" height="1" />
+          <rect x="0" y="2" width="5" height="1" />
+          <rect x="2" y="3" width="1" height="1" />
+          <rect x="2" y="4" width="1" height="1" />
+          <rect x="2" y="5" width="1" height="1" />
+          <rect x="2" y="6" width="1" height="1" />
+        </g>
+      </svg>
+    )
+  }
+}
+
+// Vertical-rate threshold: OpenSky reports noisy values near zero
+// for planes in level flight. Anything under 1 m/s (~200 fpm) is
+// treated as "level" and gets no arrow.
+const VERTICAL_RATE_LEVEL_THRESHOLD_MPS = 1
+
 function PanelOk() {
   return ({
     plane,
+    observer,
     route,
     aircraft,
     stale,
     note,
   }: {
     plane: Plane
+    observer: { lat: number; lon: number }
     route: RouteInfo | null
     aircraft: AircraftInfo | null
     stale: boolean
@@ -181,11 +228,33 @@ function PanelOk() {
     // e.g. "ALT (8230M)" alongside the primary "FL270".
     let altMetric = formatAltMeters(plane.altMeters)
     let spdMetric = formatSpeedKmh(plane.velocityMps)
+    // Vertical-rate direction: climbing, descending, or level.
+    let vertDir: 'up' | 'down' | null =
+      plane.verticalRateMps !== null &&
+      Math.abs(plane.verticalRateMps) >= VERTICAL_RATE_LEVEL_THRESHOLD_MPS
+        ? plane.verticalRateMps > 0
+          ? 'up'
+          : 'down'
+        : null
+    // Bearing (compass direction from observer to plane) and
+    // elevation angle above the horizon — the "where do I look?"
+    // pieces. Elevation uses a flat-earth approximation; under
+    // 250 km the curvature error is < 1°.
+    let bearing = bearingDeg(observer.lat, observer.lon, plane.lat, plane.lon)
+    let elevation = plane.altMeters !== null ? elevationDeg(plane.altMeters, plane.distanceKm) : null
+    let lookValue =
+      elevation !== null
+        ? `${compass8(bearing)} ${Math.round(elevation)}°`
+        : compass8(bearing)
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
       : ''
     let aircraftAria = aircraft ? `, ${aircraft.typeName || aircraft.icaoType}` : ''
-    let aria = `${displayName} flight ${flight}${routeAria}${aircraftAria}, ${formatFlightLevel(plane.altMeters)}, ${formatSpeed(plane.velocityMps)}, ${formatDistance(plane.distanceKm)} away`
+    let lookAria =
+      elevation !== null
+        ? `, look ${compass8(bearing)} at ${Math.round(elevation)} degrees elevation`
+        : ''
+    let aria = `${displayName} flight ${flight}${routeAria}${aircraftAria}, ${formatFlightLevel(plane.altMeters)}, ${formatSpeed(plane.velocityMps)}, ${formatDistance(plane.distanceKm)} away${lookAria}`
     return (
       <div
         class="panel"
@@ -194,49 +263,56 @@ function PanelOk() {
         aria-live="polite"
         aria-label={aria}
       >
-          {/* Line 1 stays in the standard LED amber regardless of
-              airline — the brand-color version was noisy. */}
-          <div class="panel-line panel-line-1" aria-hidden="true">
-            {line1}
-          </div>
-          <div class="panel-line panel-line-2 panel-stats" aria-hidden="true">
+        {/* Line 1 stays in the standard LED amber regardless of
+            airline — the brand-color version was noisy. */}
+        <div class="panel-line panel-line-1" aria-hidden="true">
+          {line1}
+        </div>
+        <div class="panel-line panel-line-2 panel-stats" aria-hidden="true">
+          <span class="stat">
+            <span class="stat-label">FLIGHT</span>
+            <span class="stat-value">{flight}</span>
+          </span>
+          {route ? (
             <span class="stat">
-              <span class="stat-label">FLIGHT</span>
-              <span class="stat-value">{flight}</span>
-            </span>
-            {route ? (
-              <span class="stat">
-                <span class="stat-label">ROUTE</span>
-                <span class="stat-value">
-                  {route.originIata}
-                  <PixelArrow />
-                  {route.destinationIata}
-                </span>
+              <span class="stat-label">ROUTE</span>
+              <span class="stat-value">
+                {route.originIata}
+                <PixelArrow />
+                {route.destinationIata}
               </span>
-            ) : null}
-          </div>
-          <div class="panel-line panel-line-3 panel-stats" aria-hidden="true">
-            <span class="stat">
-              <span class="stat-label">ALT ({altMetric})</span>
-              <span class="stat-value">{altStr}</span>
             </span>
-            <span class="stat">
-              <span class="stat-label">SPD ({spdMetric})</span>
-              <span class="stat-value">{kt}</span>
-            </span>
-            <span class="stat">
-              <span class="stat-label">DIST</span>
-              <span class="stat-value">{km}</span>
-            </span>
-          </div>
-          {aircraft?.icaoType ? (
-            <div class="panel-line panel-line-type panel-stats" aria-hidden="true">
-              <span class="stat">
-                <span class="stat-label">TYPE</span>
-                <span class="stat-value">{aircraft.icaoType}</span>
-              </span>
-            </div>
           ) : null}
+        </div>
+        <div class="panel-line panel-line-3 panel-stats" aria-hidden="true">
+          <span class="stat">
+            <span class="stat-label">ALT ({altMetric})</span>
+            <span class="stat-value">
+              {altStr}
+              {vertDir ? <PixelVerticalArrow dir={vertDir} /> : null}
+            </span>
+          </span>
+          <span class="stat">
+            <span class="stat-label">SPD ({spdMetric})</span>
+            <span class="stat-value">{kt}</span>
+          </span>
+          <span class="stat">
+            <span class="stat-label">DIST</span>
+            <span class="stat-value">{km}</span>
+          </span>
+          <span class="stat">
+            <span class="stat-label">LOOK</span>
+            <span class="stat-value">{lookValue}</span>
+          </span>
+        </div>
+        {aircraft?.icaoType ? (
+          <div class="panel-line panel-line-type panel-stats" aria-hidden="true">
+            <span class="stat">
+              <span class="stat-label">TYPE</span>
+              <span class="stat-value">{aircraft.icaoType}</span>
+            </span>
+          </div>
+        ) : null}
         {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
       </div>
     )
