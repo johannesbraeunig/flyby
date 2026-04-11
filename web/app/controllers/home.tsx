@@ -6,6 +6,7 @@ import {
   HAMBURG,
   MAX_RADIUS_KM,
   MIN_RADIUS_KM,
+  REFRESH_OPTIONS,
   locationCookieValue,
   resolveLocation,
   type ResolvedLocation,
@@ -61,7 +62,11 @@ function HomePage() {
           </div>
         ) : null}
 
-        <div id="plane-card" data-fly-poll={pollUrl}>
+        <div
+          id="plane-card"
+          data-fly-poll={pollUrl}
+          data-fly-interval={String(location.refreshSec)}
+        >
           <PlaneCard result={result} />
         </div>
 
@@ -87,6 +92,16 @@ function HomePage() {
                 value={String(location.radiusKm)}
                 required
               />
+            </label>
+            <label>
+              Refresh
+              <select name="refresh">
+                {REFRESH_OPTIONS.map((sec) => (
+                  <option value={String(sec)} selected={sec === location.refreshSec}>
+                    {sec === 0 ? 'Off' : `${sec} s`}
+                  </option>
+                ))}
+              </select>
             </label>
             <button type="submit">Apply</button>
           </form>

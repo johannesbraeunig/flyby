@@ -70,8 +70,16 @@ function evictIfFull() {
 }
 
 // Pure: parse OpenSky's positional-array response into PlanePosition[].
-// Filters on-ground and no-position rows. Distance is *not* computed
-// here — that happens later, against the requesting observer.
+// Skips:
+//   - on-ground rows (`on_ground: true`)
+//   - rows with no lat/lon
+//   - rows with no altitude data at all (neither baro nor geo altitude):
+//     these are usually ground-radar blips or surface vehicles that
+//     slipped past the on_ground flag, and we can't show a useful
+//     "FL???" for them.
+//
+// Distance is not computed here — that happens later, against the
+// requesting observer.
 //
 // OpenSky array layout (index → field):
 //   0 icao24, 1 callsign, 2 origin_country, 3 time_position, 4 last_contact,
@@ -92,6 +100,11 @@ export function parseStates(json: unknown): PlanePosition[] {
     let lat = typeof row[6] === 'number' ? row[6] : null
     if (lat === null || lon === null) continue
 
+    let altMeters =
+      typeof row[7] === 'number' ? row[7] : typeof row[13] === 'number' ? row[13] : null
+    // No altitude at all → treat as ground / unknown; skip.
+    if (altMeters === null) continue
+
     let icao24 = typeof row[0] === 'string' ? row[0] : ''
     let callsignRaw = typeof row[1] === 'string' ? row[1] : ''
     let callsign = callsignRaw.trim()
@@ -102,7 +115,7 @@ export function parseStates(json: unknown): PlanePosition[] {
       callsign,
       lat,
       lon,
-      altMeters: typeof row[7] === 'number' ? row[7] : typeof row[13] === 'number' ? row[13] : null,
+      altMeters,
       velocityMps: typeof row[9] === 'number' ? row[9] : null,
       trackDeg: typeof row[10] === 'number' ? row[10] : null,
       onGround: false,

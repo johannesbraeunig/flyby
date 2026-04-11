@@ -24,6 +24,14 @@ export function PlaneCard() {
   }
 }
 
+// Live-map deep link. OpenSky's own map (map.opensky-network.org)
+// is gated behind a human-verification SPA and doesn't accept URL
+// params for a specific aircraft, so we point at ADS-B Exchange's
+// globe view, which reliably deep-links by icao24 hex.
+function liveMapUrl(icao24: string): string {
+  return `https://globe.adsbexchange.com/?icao=${encodeURIComponent(icao24.toLowerCase())}`
+}
+
 function PanelOk() {
   return ({ plane, stale, note }: { plane: Plane; stale: boolean; note: string | null }) => {
     let { icao, number } = splitCallsign(plane.callsign)
@@ -36,24 +44,31 @@ function PanelOk() {
     let line3 = `${formatFlightLevel(plane.altMeters)}  ${formatSpeed(plane.velocityMps).padStart(5)}  ${formatDistance(plane.distanceKm)}`
     let aria = `${displayName} flight ${flight}, ${formatFlightLevel(plane.altMeters)}, ${formatSpeed(plane.velocityMps)}, ${formatDistance(plane.distanceKm)} away`
     return (
-      <div
-        class="panel"
-        data-fly-state={stale ? 'stale' : 'ok'}
-        role="status"
-        aria-live="polite"
-        aria-label={aria}
-      >
-        <div class="panel-line panel-line-1" style={`color: ${color}`} aria-hidden="true">
-          {line1}
+      <>
+        <div
+          class="panel"
+          data-fly-state={stale ? 'stale' : 'ok'}
+          role="status"
+          aria-live="polite"
+          aria-label={aria}
+        >
+          <div class="panel-line panel-line-1" style={`color: ${color}`} aria-hidden="true">
+            {line1}
+          </div>
+          <div class="panel-line panel-line-2" aria-hidden="true">
+            {line2}
+          </div>
+          <div class="panel-line panel-line-3" aria-hidden="true">
+            {line3}
+          </div>
+          {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
         </div>
-        <div class="panel-line panel-line-2" aria-hidden="true">
-          {line2}
-        </div>
-        <div class="panel-line panel-line-3" aria-hidden="true">
-          {line3}
-        </div>
-        {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
-      </div>
+        <p class="panel-links">
+          <a href={liveMapUrl(plane.icao24)} target="_blank" rel="noreferrer">
+            Track {plane.icao24.toUpperCase()} on live map ↗
+          </a>
+        </p>
+      </>
     )
   }
 }

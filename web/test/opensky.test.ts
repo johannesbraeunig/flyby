@@ -61,6 +61,12 @@ describe('parseStates', () => {
     assert.equal(parseStates({ states: [row({ 5: null }), row({ 6: null })] }).length, 0)
   })
 
+  it('skips rows where both baro_altitude and geo_altitude are null', () => {
+    // These are typically ground-radar blips or surface vehicles the
+    // on_ground flag missed — no altitude → treat as ground.
+    assert.equal(parseStates({ states: [row({ 7: null, 13: null })] }).length, 0)
+  })
+
   it('falls back to geo_altitude when baro_altitude is missing', () => {
     let positions = parseStates({ states: [row({ 7: null, 13: 9500 })] })
     assert.equal(positions[0]!.altMeters, 9500)

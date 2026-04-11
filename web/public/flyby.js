@@ -9,7 +9,7 @@
 (function () {
   'use strict'
 
-  var POLL_INTERVAL_MS = 30000
+  var DEFAULT_POLL_INTERVAL_MS = 30000
   var DENIED_FALLBACK = '/?denied=1'
 
   function bootGeolocate() {
@@ -48,6 +48,16 @@
     var pollUrl = card.getAttribute('data-fly-poll')
     if (!pollUrl) return
 
+    // Interval comes from the server (driven by the Settings form).
+    // 0 = user turned auto-refresh off; just render the initial
+    // server response and stop.
+    var intervalSec = parseInt(card.getAttribute('data-fly-interval') || '', 10)
+    if (!isFinite(intervalSec) || intervalSec < 0) {
+      intervalSec = DEFAULT_POLL_INTERVAL_MS / 1000
+    }
+    if (intervalSec === 0) return
+    var intervalMs = intervalSec * 1000
+
     var inFlight = false
     var timer = null
 
@@ -76,7 +86,7 @@
 
     function start() {
       stop()
-      timer = setInterval(tick, POLL_INTERVAL_MS)
+      timer = setInterval(tick, intervalMs)
     }
     function stop() {
       if (timer !== null) {

@@ -7,13 +7,14 @@ export interface LayoutProps {
   children?: RemixNode
 }
 
+const REPO_URL = 'https://github.com/johannesbraeunig/flyby'
+
 export function Layout() {
   return ({ title, children }: LayoutProps) => (
     <Document title={title}>
       <div class="page">
         <header class="page-header">
           <h1>FlyBy</h1>
-          <p class="tagline">Nearest plane overhead, the same way the LED board sees it.</p>
         </header>
         <main>{children}</main>
         <footer class="page-footer">
@@ -22,7 +23,10 @@ export function Layout() {
             <a href="https://opensky-network.org" rel="noreferrer">
               OpenSky Network
             </a>
-            . Refreshes every 30 s.
+            {' · '}
+            <a href={REPO_URL} rel="noreferrer">
+              Source on GitHub
+            </a>
           </p>
         </footer>
       </div>
