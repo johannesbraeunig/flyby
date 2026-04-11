@@ -25,13 +25,17 @@
 
 html,
 body {
-  height: 100%;
+  min-height: 100%;
   background: var(--bg-deep);
   color: var(--led-amber);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
+  /* Hide horizontal overflow from the oversized LED text on narrow
+     viewports, but allow vertical scrolling so a tall 4-line panel
+     stays reachable when the window is short. */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body {
@@ -61,7 +65,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
+  /* `safe center` falls back to flex-start when content is taller
+     than the stage, so the top of the panel stays reachable and
+     scrolling reveals what's below. Plain `center` would clip the
+     top. */
+  justify-content: safe center;
   padding: 1rem clamp(0.75rem, 3vw, 2rem);
   min-height: 0;
 }
