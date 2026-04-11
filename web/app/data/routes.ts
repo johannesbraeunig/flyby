@@ -15,12 +15,21 @@ const FETCH_TIMEOUT_MS = 3_000
 const CACHE_TTL_MS = 60 * 60 * 1_000 // 1 hour
 const CACHE_MAX_ENTRIES = 500
 
-// Cross-check threshold between adsbdb's claimed origin and the
-// first waypoint of OpenSky's /tracks/all trajectory. Big enough
-// to absorb taxi + initial climb + ADS-B coverage gaps (typically
-// < 50 km), small enough to catch "wrong route entirely" drift
-// (typically 500+ km when adsbdb's schedule is stale).
+// Cross-check threshold between adsbdb's claimed route endpoints
+// and the first waypoint of OpenSky's /tracks/all trajectory. Big
+// enough to absorb taxi + initial climb + airport-to-centroid
+// variance (typically < 50 km), small enough to catch "wrong route
+// entirely" drift (typically 500+ km when adsbdb's schedule is
+// stale).
 const ROUTE_MISMATCH_THRESHOLD_KM = 150
+
+// If the track has been running longer than this, we can't
+// meaningfully compare its first waypoint to the origin airport —
+// ADS-B coverage gaps (especially over oceans) mean the "first
+// contact" point can be well inside the flight path rather than
+// at the real origin. In that case we trust adsbdb's route as-is
+// rather than risk dropping a correct one.
+const TRACK_SHORT_SECONDS = 60 * 60 // 1 hour
 
 export interface RouteInfo {
   originIata: string
@@ -33,6 +42,8 @@ export interface RouteInfo {
   destinationIata: string
   destinationIcao: string
   destinationName: string
+  destinationLat: number | null
+  destinationLon: number | null
 }
 
 interface CacheEntry {
@@ -86,6 +97,8 @@ export function parseAdsbdbRoute(json: unknown): RouteInfo | null {
   let dIata = (destination as { iata_code?: unknown }).iata_code
   let dIcao = (destination as { icao_code?: unknown }).icao_code
   let dName = (destination as { name?: unknown }).name
+  let dLat = (destination as { latitude?: unknown }).latitude
+  let dLon = (destination as { longitude?: unknown }).longitude
 
   if (
     typeof oIata !== 'string' ||
@@ -105,6 +118,8 @@ export function parseAdsbdbRoute(json: unknown): RouteInfo | null {
     destinationIata: dIata.toUpperCase(),
     destinationIcao: dIcao.toUpperCase(),
     destinationName: typeof dName === 'string' ? dName : '',
+    destinationLat: typeof dLat === 'number' ? dLat : null,
+    destinationLon: typeof dLon === 'number' ? dLon : null,
   }
 }
 
@@ -146,27 +161,69 @@ export async function getRoute(callsign: string): Promise<RouteInfo | null> {
   }
 }
 
-// Cross-check a route from adsbdb against OpenSky's actual
-// ADS-B trajectory. adsbdb's DB is schedule-based, so when
-// airlines reuse a callsign for a different route today, adsbdb
-// happily returns yesterday's schedule. If /tracks/all's first
-// waypoint is far from adsbdb's claimed origin airport, we
-// don't trust the route and drop it (the callsign still renders).
+// Cross-check a route from adsbdb against OpenSky's actual ADS-B
+// trajectory. adsbdb's DB is schedule-based, so when an airline
+// reuses a callsign for a different route today, adsbdb happily
+// returns yesterday's schedule. We use OpenSky's /tracks/all as
+// ground truth.
 //
-// Degrades gracefully:
-// - No route → nothing to verify.
-// - No track (OpenSky unreachable, rate-limited, or no track for
-//   this icao24) → trust adsbdb as-is.
-// - adsbdb didn't include origin coordinates → trust adsbdb.
+// The naïve check — "track start near origin?" — produces false
+// positives for long-haul flights where ADS-B coverage has gaps
+// (especially over oceans). A JFK→FRA flight might legitimately
+// have its first /tracks/all waypoint 300 km west of FRA where
+// the European receiver network picks it up again. That's not
+// evidence of a stale route.
+//
+// So we only drop the route when ALL of the following hold:
+//   1. Track start is far (> 150 km) from the claimed origin
+//   2. Track start is also far from the claimed destination
+//      (so it's not a "plane approaching destination after gap")
+//   3. The track has been running < 60 minutes (so the first
+//      waypoint plausibly represents the real departure region)
+//
+// If any escape hatch catches (track runs long, or track start is
+// near either endpoint), trust adsbdb. If any required field is
+// missing (no track, no coordinates on either endpoint), trust
+// adsbdb and move on.
 export function verifyRouteAgainstTrack(
   route: RouteInfo | null,
   track: TrackStart | null,
+  nowMs: number = Date.now(),
 ): RouteInfo | null {
   if (!route) return route
   if (!track) return route
   if (route.originLat === null || route.originLon === null) return route
-  let d = haversineKm(route.originLat, route.originLon, track.lat, track.lon)
-  return d <= ROUTE_MISMATCH_THRESHOLD_KM ? route : null
+
+  let originDistance = haversineKm(
+    route.originLat,
+    route.originLon,
+    track.lat,
+    track.lon,
+  )
+  if (originDistance <= ROUTE_MISMATCH_THRESHOLD_KM) return route
+
+  // Escape hatch 1: track start is near the destination. ADS-B
+  // coverage almost certainly resumed mid-flight and we've been
+  // tracking only the final leg — the origin isn't wrong.
+  if (route.destinationLat !== null && route.destinationLon !== null) {
+    let destDistance = haversineKm(
+      route.destinationLat,
+      route.destinationLon,
+      track.lat,
+      track.lon,
+    )
+    if (destDistance <= ROUTE_MISMATCH_THRESHOLD_KM) return route
+  }
+
+  // Escape hatch 2: track has been running long enough that its
+  // first waypoint is old data, not "where the plane departed".
+  // Trust adsbdb absent stronger evidence.
+  let trackAgeSec = nowMs / 1000 - track.startTime
+  if (trackAgeSec > TRACK_SHORT_SECONDS) return route
+
+  // Short track, far from both endpoints. Classic stale-adsbdb
+  // case (the IBE07YW bug). Drop the route.
+  return null
 }
 
 export function __resetRouteCacheForTests() {

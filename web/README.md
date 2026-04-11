@@ -71,35 +71,47 @@ The layout follows the upstream `skills/remix-project-layout` SKILL.
 ## Data flow
 
 1. Request comes in to `home` controller.
-2. `resolveLocation` reads `?lat&lon&radius`, then a `flyby_loc` cookie,
-   then falls back to Hamburg.
-3. If we have no usable coordinates, the controller renders the **locating
-   page** — no OpenSky call. The bundled `flyby.js` then prompts for
-   geolocation and redirects.
-4. Otherwise the controller calls `getNearestAircraft(lat, lon, radius)`,
-   which:
+2. `resolveLocation` reads `?lat&lon&radius&refresh` from the URL — the
+   URL search params are the **single source of truth**, no cookies, no
+   session state.
+3. If `lat`/`lon` are missing, the controller renders the **locating
+   page** (no OpenSky call). The user then explicitly picks "Use my
+   location" (triggers `navigator.geolocation` on click) or "Use
+   Hamburg" (links to `/?lat=53.5511&lon=9.9937&radius=50`). Either
+   path results in a URL with coordinates.
+4. With coordinates, the controller calls `getNearestAircraft(lat, lon,
+   radius)`, which:
     - Builds a bbox via `bboxFor` (mirrors firmware exactly).
     - Checks an in-memory cache keyed by *rounded* bbox (15 s TTL).
     - On miss, fetches OpenSky `/api/states/all` with an 8 s timeout.
-    - Parses the positional-array response, drops on-ground / no-position
+    - Parses the positional-array response, drops on-ground / no-altitude
       rows, sorts by haversine distance.
-5. The `<PlaneCard>` component renders the result. On 429 it serves the
+    - Picks the **nearest commercial flight** (callsign matches
+      `/^[A-Z]{3}\d/`) or falls back to the overall nearest.
+5. In parallel with step 4, the controller enriches with route info
+   (adsbdb.com), aircraft type (adsbdb + hexdb.io fallback), and a
+   ground-truth track (OpenSky `/tracks/all`). The track's first
+   waypoint is cross-checked against adsbdb's claimed origin airport;
+   if they disagree by >150 km, the route is dropped as stale.
+6. The `<PlaneCard>` component renders the result. On 429 it serves the
    last cached row with a "rate limited" banner; on total failure it
    shows an explicit error state.
-6. Client-side `flyby.js` polls `/api/nearest` (which returns the same
+7. Client-side `flyby.js` polls `/api/nearest` (which returns the same
    `<PlaneCard>` markup as a fragment) every 30 s and replaces
-   `#plane-card`'s contents.
+   `#plane-card`'s contents. The polling endpoint has a per-IP token-
+   bucket rate limit (6 req/min) to protect OpenSky's anonymous quota.
 
 ## Why these decisions
 
 | Question | Decision | Why |
 | --- | --- | --- |
-| Geolocation transport | URL query params (with cookie persistence) | Shareable links, server-only data fetching, no JS-only state |
+| Location state | URL query params only, no cookies | Shareable links, zero hidden state, URL is source of truth |
 | Refresh strategy | Client-side `setInterval` polling a fragment endpoint | No accessibility-hostile meta refresh; pauses when tab hidden |
-| OpenSky access | Server-side only, with rounded-bbox cache | OpenSky CORS is unfriendly; cache also amortises rate limits |
+| OpenSky access | Server-side only, with rounded-bbox cache + per-IP rate limit | OpenSky CORS is unfriendly; cache amortises rate limits; limiter protects the ~400/day anonymous quota |
+| Route verification | Cross-check adsbdb origin vs OpenSky `/tracks/all` start | adsbdb is schedule-based and goes stale on callsign reuse; tracks are ground truth |
 | Rate-limit handling | Stale-on-429 from in-memory cache | A slightly old plane is more useful than an error page |
 | Airline brand colors | Direct port of `src/airlines.cpp` | The firmware and the web app must agree visually |
-| Auto-refresh cadence | 30 s | Matches firmware loop |
+| Auto-refresh cadence | 30 s (configurable in settings) | Matches firmware loop |
 | UI framework | None — Remix v3 `component` only | The user asked for Remix 3, not React |
 | Client bundler | None | Vanilla JS in `public/flyby.js` is enough; no JSX islands needed |
 

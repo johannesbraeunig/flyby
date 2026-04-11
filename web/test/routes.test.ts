@@ -41,9 +41,11 @@ describe('parseAdsbdbRoute', () => {
     assert.equal(r!.originLon, -95.3414)
     assert.equal(r!.destinationIata, 'FRA')
     assert.equal(r!.destinationIcao, 'EDDF')
+    assert.equal(r!.destinationLat, 50.0379)
+    assert.equal(r!.destinationLon, 8.5622)
   })
 
-  it('stores originLat/Lon as null when adsbdb omits them', () => {
+  it('stores originLat/Lon + destinationLat/Lon as null when adsbdb omits them', () => {
     let json = {
       response: {
         flightroute: {
@@ -55,6 +57,8 @@ describe('parseAdsbdbRoute', () => {
     let r = parseAdsbdbRoute(json)
     assert.equal(r?.originLat, null)
     assert.equal(r?.originLon, null)
+    assert.equal(r?.destinationLat, null)
+    assert.equal(r?.destinationLon, null)
   })
 
   it('returns null on missing fields', () => {
@@ -72,47 +76,107 @@ describe('parseAdsbdbRoute', () => {
 })
 
 describe('verifyRouteAgainstTrack', () => {
-  function mkRoute(lat: number | null, lon: number | null): RouteInfo {
+  // MAD → VIE route with real airport coordinates.
+  function mkRoute(
+    overrides: Partial<Pick<RouteInfo, 'originLat' | 'originLon' | 'destinationLat' | 'destinationLon'>> = {},
+  ): RouteInfo {
     return {
       originIata: 'MAD',
       originIcao: 'LEMD',
       originName: 'Madrid',
-      originLat: lat,
-      originLon: lon,
+      originLat: 40.471926,
+      originLon: -3.56264,
       destinationIata: 'VIE',
       destinationIcao: 'LOWW',
       destinationName: 'Vienna',
+      destinationLat: 48.110298,
+      destinationLon: 16.5697,
+      ...overrides,
     }
   }
 
-  it('passes through the route when origin matches the track start (< 150 km)', () => {
-    // Both near Madrid airport — 3 km apart.
-    let route = mkRoute(40.471926, -3.56264)
-    let track = { lat: 40.5, lon: -3.58, startTime: 1 }
-    assert.equal(verifyRouteAgainstTrack(route, track), route)
+  // nowMs = 1_700_000_000_000 (seconds: 1_700_000_000). Tests pass
+  // this in so trackAgeSec is deterministic regardless of wall clock.
+  const NOW_MS = 1_700_000_000_000
+  const NOW_S = 1_700_000_000
+
+  it('passes the route through when origin matches the track start', () => {
+    // Track starts 3 km from MAD.
+    let route = mkRoute()
+    let track = { lat: 40.5, lon: -3.58, startTime: NOW_S - 60 }
+    assert.equal(verifyRouteAgainstTrack(route, track, NOW_MS), route)
   })
 
-  it('drops the route when origin and track start are far apart (IBE07YW bug)', () => {
-    // adsbdb says MAD; actual track started at HAM (~1500 km away).
-    let route = mkRoute(40.471926, -3.56264)
-    let track = { lat: 53.6304, lon: 9.9882, startTime: 1 } // HAM
-    assert.equal(verifyRouteAgainstTrack(route, track), null)
+  it('drops the route on the IBE07YW case (short track, far from both endpoints)', () => {
+    // MAD → VIE, but track starts at HAM and is only 1 min old.
+    let route = mkRoute()
+    let track = { lat: 53.6304, lon: 9.9882, startTime: NOW_S - 60 }
+    assert.equal(verifyRouteAgainstTrack(route, track, NOW_MS), null)
+  })
+
+  it('keeps the route when track start is near the DESTINATION (gapped long-haul)', () => {
+    // JFK → FRA route, but ADS-B coverage only picks up 100 km
+    // west of Frankfurt after the transatlantic crossing. We
+    // should still trust the route.
+    let route: RouteInfo = {
+      originIata: 'JFK',
+      originIcao: 'KJFK',
+      originName: 'John F Kennedy',
+      originLat: 40.6398,
+      originLon: -73.7789,
+      destinationIata: 'FRA',
+      destinationIcao: 'EDDF',
+      destinationName: 'Frankfurt',
+      destinationLat: 50.0379,
+      destinationLon: 8.5622,
+    }
+    // Track start ~ 100 km west of FRA, short track (20 min old).
+    let track = { lat: 50.1, lon: 7.2, startTime: NOW_S - 20 * 60 }
+    assert.equal(verifyRouteAgainstTrack(route, track, NOW_MS), route)
+  })
+
+  it('keeps the route when the track has been running > 60 minutes (coverage gap, mid-Atlantic)', () => {
+    // DLH transatlantic picked up 90 minutes into the flight
+    // somewhere over Greenland — nowhere near JFK or FRA, but
+    // the track is old enough that we should trust adsbdb.
+    let route: RouteInfo = {
+      originIata: 'JFK',
+      originIcao: 'KJFK',
+      originName: 'John F Kennedy',
+      originLat: 40.6398,
+      originLon: -73.7789,
+      destinationIata: 'FRA',
+      destinationIcao: 'EDDF',
+      destinationName: 'Frankfurt',
+      destinationLat: 50.0379,
+      destinationLon: 8.5622,
+    }
+    // Track start at Greenland, 90 min old — way outside 150 km
+    // of either endpoint, but the age escape hatch kicks in.
+    let track = { lat: 70, lon: -40, startTime: NOW_S - 90 * 60 }
+    assert.equal(verifyRouteAgainstTrack(route, track, NOW_MS), route)
+  })
+
+  it('drops the route when short-track AND far from destination AND destination coords are known', () => {
+    let route = mkRoute()
+    let track = { lat: 0, lon: 0, startTime: NOW_S - 60 } // mid-Atlantic, 1 min
+    assert.equal(verifyRouteAgainstTrack(route, track, NOW_MS), null)
   })
 
   it('passes through when no track data is available (graceful fallback)', () => {
-    let route = mkRoute(40.471926, -3.56264)
-    assert.equal(verifyRouteAgainstTrack(route, null), route)
+    let route = mkRoute()
+    assert.equal(verifyRouteAgainstTrack(route, null, NOW_MS), route)
   })
 
   it('passes through when adsbdb did not return origin coordinates', () => {
-    let route = mkRoute(null, null)
-    let track = { lat: 53.6304, lon: 9.9882, startTime: 1 }
-    assert.equal(verifyRouteAgainstTrack(route, track), route)
+    let route = mkRoute({ originLat: null, originLon: null })
+    let track = { lat: 53.6304, lon: 9.9882, startTime: NOW_S - 60 }
+    assert.equal(verifyRouteAgainstTrack(route, track, NOW_MS), route)
   })
 
   it('returns null when no route was found (nothing to verify)', () => {
-    let track = { lat: 40.5, lon: -3.58, startTime: 1 }
-    assert.equal(verifyRouteAgainstTrack(null, track), null)
+    let track = { lat: 40.5, lon: -3.58, startTime: NOW_S }
+    assert.equal(verifyRouteAgainstTrack(null, track, NOW_MS), null)
   })
 })
 

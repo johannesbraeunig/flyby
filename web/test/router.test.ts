@@ -56,23 +56,33 @@ const ADSBDB_AIRCRAFT_BODY = JSON.stringify({
   },
 })
 
-// Default track start near Houston (IAH) — matches adsbdb's DLH441
-// origin above, so the cross-check passes and the route renders.
-const OPENSKY_TRACK_BODY = JSON.stringify({
-  icao24: 'abc123',
-  callsign: 'DLH441  ',
-  startTime: 1700000000,
-  endTime: 1700001000,
-  path: [[1700000000, 29.99, -95.34, 300, 0, false]],
-})
+// Build a track body with a fresh startTime so the route
+// verification's "track age > 60 min" escape hatch doesn't
+// accidentally kick in during tests.
+function buildTrackBody(lat: number, lon: number, ageSec = 60): string {
+  let now = Math.floor(Date.now() / 1000)
+  let startTime = now - ageSec
+  return JSON.stringify({
+    icao24: 'abc123',
+    callsign: 'DLH441  ',
+    startTime,
+    endTime: now,
+    path: [[startTime, lat, lon, 300, 0, false]],
+  })
+}
+
+// Default: track starts near Houston (IAH) and is 60 s old —
+// matches adsbdb's DLH441 origin, so the cross-check passes
+// and the route renders.
+const OPENSKY_TRACK_BODY_DEFAULT = () => buildTrackBody(29.99, -95.34)
 
 // Overridable per-test. Default is "trajectory matches adsbdb origin".
-let trackBody = OPENSKY_TRACK_BODY
+let trackBody = OPENSKY_TRACK_BODY_DEFAULT()
 
 beforeEach(() => {
   originalFetch = globalThis.fetch
   lastUrl = null
-  trackBody = OPENSKY_TRACK_BODY
+  trackBody = OPENSKY_TRACK_BODY_DEFAULT()
   __resetCacheForTests()
   __resetRouteCacheForTests()
   __resetAircraftCacheForTests()
@@ -154,28 +164,48 @@ describe('router', () => {
     assert.match(html, /class="panel-link settings-inline-link"/)
   })
 
-  it('drops a stale adsbdb route when the OpenSky track starts far from adsbdb origin', async () => {
-    // Regression for IBE07YW: adsbdb returned MAD→VIE but today
-    // the plane was actually flying HAM→MAD. With the track
-    // starting near Hamburg (~8000 km from IAH), the cross-check
-    // must drop the route so we don't show wrong info.
-    trackBody = JSON.stringify({
-      icao24: 'abc123',
-      callsign: 'DLH441  ',
-      startTime: 1700000000,
-      endTime: 1700001000,
-      path: [[1700000000, 53.6304, 9.9882, 300, 0, false]], // HAM
-    })
+  it('drops a stale adsbdb route when a fresh track starts far from adsbdb origin', async () => {
+    // Regression for IBE07YW: adsbdb returned IAH→FRA but today
+    // the plane was actually flying HAM→MAD. With a fresh
+    // (60 s old) track starting at Hamburg — ~8000 km from
+    // IAH and ~750 km from FRA, both beyond the 150 km
+    // threshold — the cross-check must drop the route so we
+    // don't show wrong info.
+    trackBody = buildTrackBody(53.6304, 9.9882, 60) // HAM, 60 s old
     let res = await router.fetch('http://localhost/?lat=53.5511&lon=9.9937')
     assert.equal(res.status, 200)
     let html = await res.text()
-    // FLIGHT still renders — we have a callsign.
     assert.match(html, /DLH441/)
-    // ROUTE stat is gone because adsbdb's origin (IAH) doesn't
-    // match the track start (HAM).
     assert.doesNotMatch(html, /stat-label[^>]*>ROUTE</)
-    // No adsbdb airport codes should appear in the panel.
     assert.doesNotMatch(html, /stat-value[^>]*>IAH</)
+  })
+
+  it('keeps the route when the track has been running > 60 minutes (gapped long-haul)', async () => {
+    // Regression: long-haul transatlantic picked up over Greenland
+    // after the Atlantic coverage gap. Track start is far from
+    // both IAH (adsbdb origin) and FRA (adsbdb destination), but
+    // the track is 90 minutes old — the age escape hatch should
+    // keep the route instead of dropping it.
+    trackBody = buildTrackBody(70, -40, 90 * 60) // Greenland, 90 min old
+    let res = await router.fetch('http://localhost/?lat=53.5511&lon=9.9937')
+    let html = await res.text()
+    assert.match(html, /DLH441/)
+    assert.match(html, /stat-label[^>]*>ROUTE</)
+    assert.match(html, /IAH/)
+  })
+
+  it('keeps the route when the track start is near the DESTINATION (coverage gap recovery)', async () => {
+    // Simulated JFK→FRA with a track that only starts 100 km
+    // west of FRA (ADS-B picks up the plane during European
+    // descent). Track start is far from IAH but close enough
+    // to FRA that the destination escape hatch should fire.
+    // Using the existing DLH441 IAH→FRA stub from the fixtures.
+    trackBody = buildTrackBody(50.1, 7.2, 20 * 60) // near FRA, 20 min old
+    let res = await router.fetch('http://localhost/?lat=53.5511&lon=9.9937')
+    let html = await res.text()
+    assert.match(html, /DLH441/)
+    assert.match(html, /stat-label[^>]*>ROUTE</)
+    assert.match(html, /IAH/)
   })
 
   it('keeps the route when OpenSky /tracks is unreachable (graceful fallback)', async () => {
