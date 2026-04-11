@@ -244,14 +244,13 @@ body {
 .panel-link {
   color: inherit;
   text-decoration: none;
+  border: none;
   border-bottom: 1px dotted var(--ui-border);
-  padding-bottom: 2px;
+  padding: 0 0 2px;
   cursor: pointer;
   background: transparent;
-  border-top: none;
-  border-left: none;
-  border-right: none;
   font: inherit;
+  line-height: inherit;
 }
 
 .panel-link:hover {
@@ -449,7 +448,7 @@ body {
 
 .settings-form {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
@@ -460,6 +459,7 @@ body {
   color: var(--ui-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  min-width: 0;
 }
 
 .settings-form label > span {
@@ -468,6 +468,11 @@ body {
 
 .settings-form input,
 .settings-form select {
+  /* width:100% + min-width:0 + box-sizing inherited from `*`
+     keeps number inputs and selects inside their column instead
+     of falling back to the browser's default content-driven width. */
+  width: 100%;
+  min-width: 0;
   padding: 0.45rem 0.55rem;
   background: #000;
   border: 1px solid rgba(255, 170, 0, 0.2);
@@ -505,8 +510,8 @@ body {
 }
 
 .settings-secondary {
+  grid-column: 1 / -1;
   width: 100%;
-  margin-top: 0.6rem;
   padding: 0.5rem;
   background: transparent;
   border: 1px solid var(--ui-border);
@@ -522,6 +527,11 @@ body {
 .settings-secondary:hover {
   color: var(--led-amber);
   border-color: var(--led-amber);
+}
+
+.settings-secondary[disabled] {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .settings-meta {

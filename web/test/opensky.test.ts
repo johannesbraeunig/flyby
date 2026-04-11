@@ -150,4 +150,33 @@ describe('selectNearestPreferringCommercial', () => {
     let pick = selectNearestPreferringCommercial(ranked)
     assert.equal(pick?.callsign, 'BAW117')
   })
+
+  it('recognises airlines whose ICAO prefix is not in the brand-color table', () => {
+    // EXS = Jet2.com, BTI = airBaltic — real commercial airlines that
+    // don't happen to be in our 40-entry airlines.ts table. The
+    // callsign-pattern detector should still treat them as commercial.
+    let positions = parseStates({
+      states: [
+        row({ 0: 'ga-1', 1: 'DMMXC   ', 5: 9.99, 6: 53.55 }), // closest, GA
+        row({ 0: 'jet2', 1: 'EXS74XC ', 5: 10.0, 6: 54.0 }), // farther, Jet2.com
+      ],
+    })
+    let ranked = rankByDistance(positions, 53.5511, 9.9937)
+    let pick = selectNearestPreferringCommercial(ranked)
+    assert.equal(pick?.callsign, 'EXS74XC')
+  })
+
+  it('does not mistake general-aviation registrations for commercial', () => {
+    let positions = parseStates({
+      states: [
+        row({ 0: 'us-ga', 1: 'N45DP   ', 5: 9.99, 6: 53.55 }), // US reg
+        row({ 0: 'uk-ga', 1: 'GHUEW   ', 5: 10.0, 6: 54.0 }), // UK reg, 4 letters then no digit
+        row({ 0: 'de-ga', 1: 'DMMXC   ', 5: 11.0, 6: 55.0 }), // DE reg, no digits
+      ],
+    })
+    let ranked = rankByDistance(positions, 53.5511, 9.9937)
+    let pick = selectNearestPreferringCommercial(ranked)
+    // No commercial → falls back to the nearest overall.
+    assert.equal(pick?.callsign, 'N45DP')
+  })
 })

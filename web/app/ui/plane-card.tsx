@@ -92,6 +92,12 @@ export function PlaneCard() {
           <label for="settings-toggle" class="panel-link settings-inline-link">
             Settings
           </label>
+          <span class="panel-link-sep" aria-hidden="true">
+            {' · '}
+          </span>
+          <button type="button" id="fullscreen-btn" class="panel-link panel-link-btn">
+            Fullscreen
+          </button>
         </p>
       </>
     )

@@ -9,7 +9,6 @@
 // same area share results, plus stale-on-429 to keep the page useful
 // when the API briefly hates us.
 
-import { lookupAirline } from './airlines.ts'
 import { bboxFor, haversineKm, type BBox } from './geo.ts'
 
 const OPENSKY_URL = 'https://opensky-network.org/api/states/all'
@@ -212,16 +211,23 @@ export async function getNearestAircraft(
 }
 
 // Pick a "best" plane from a distance-ranked candidate list. We prefer
-// commercial airliners over general-aviation aircraft — "commercial"
-// meaning the callsign starts with an ICAO prefix we know
-// (Lufthansa, BA, KLM, …). In practice this biases toward large
-// passenger jets and away from Cessnas, private jets registered as
-// tail numbers, and surveying helicopters. Falls back to the overall
-// nearest when no commercial flight is in range.
+// commercial airliners over general-aviation aircraft.
+//
+// "Commercial-looking" = callsign that starts with 3 uppercase ASCII
+// letters followed by at least one digit (e.g. DLH441, BAW117, EXS74XC,
+// BTI233). This catches essentially every scheduled airline regardless
+// of whether the ICAO prefix is in our hand-rolled 40-entry airline
+// brand-color table. General-aviation callsigns like N118MX, DMMXC,
+// D-EABC, HB-JCI, G-HUEW don't match this pattern (either they start
+// with a digit, or they have more/fewer letters before the digit, or
+// they contain a dash). They fall through to the "nearest overall"
+// fallback only when no airline-style flight is in range.
+const COMMERCIAL_CALLSIGN_PATTERN = /^[A-Z]{3}\d/
+
 export function selectNearestPreferringCommercial(ranked: ReadonlyArray<Plane>): Plane | null {
   if (ranked.length === 0) return null
   for (let p of ranked) {
-    if (lookupAirline(p.callsign)) return p
+    if (COMMERCIAL_CALLSIGN_PATTERN.test(p.callsign)) return p
   }
   return ranked[0] ?? null
 }

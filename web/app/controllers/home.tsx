@@ -164,10 +164,14 @@ function HomePage() {
               <button type="submit" class="settings-apply">
                 Apply
               </button>
+              <button
+                type="button"
+                id="update-location-btn"
+                class="settings-secondary"
+              >
+                Update location
+              </button>
             </form>
-            <button type="button" id="fullscreen-btn" class="settings-secondary">
-              Fullscreen
-            </button>
           <p class="settings-meta">
             Data from{' '}
             <a href="https://opensky-network.org" rel="noreferrer">

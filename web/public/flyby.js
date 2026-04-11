@@ -124,13 +124,18 @@
   }
 
   function bootFullscreen() {
-    var btn = document.getElementById('fullscreen-btn')
-    if (!btn) return
-    btn.addEventListener('click', function () {
+    // Event delegation on document — the Fullscreen button lives
+    // inside #plane-card and gets replaced every 30 s by the poll,
+    // so a direct addEventListener on the element would stop
+    // firing after the first refresh.
+    document.addEventListener('click', function (e) {
+      var target = e.target
+      if (!target || typeof target.closest !== 'function') return
+      var btn = target.closest('#fullscreen-btn')
+      if (!btn) return
       var doc = document
       var docEl = doc.documentElement
-      var isFs = doc.fullscreenElement
-      if (isFs) {
+      if (doc.fullscreenElement) {
         if (doc.exitFullscreen) doc.exitFullscreen()
       } else if (docEl.requestFullscreen) {
         docEl.requestFullscreen().catch(function (err) {
@@ -140,10 +145,50 @@
     })
   }
 
+  function bootUpdateLocation() {
+    // "Update location" button inside the settings overlay. Triggers
+    // a fresh geolocation prompt and, on success, redirects to the
+    // home URL preserving the user's current radius + refresh.
+    document.addEventListener('click', function (e) {
+      var target = e.target
+      if (!target || typeof target.closest !== 'function') return
+      var btn = target.closest('#update-location-btn')
+      if (!btn) return
+      if (!('geolocation' in navigator)) return
+      btn.setAttribute('disabled', 'disabled')
+      var originalText = btn.textContent
+      btn.textContent = 'Locating…'
+      var form = btn.closest('form')
+      var radius =
+        (form && form.querySelector('[name="radius"]')
+          ? form.querySelector('[name="radius"]').value
+          : '50') || '50'
+      var refresh =
+        (form && form.querySelector('[name="refresh"]')
+          ? form.querySelector('[name="refresh"]').value
+          : '30') || '30'
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          var lat = pos.coords.latitude.toFixed(4)
+          var lon = pos.coords.longitude.toFixed(4)
+          window.location.replace(
+            '/?lat=' + lat + '&lon=' + lon + '&radius=' + radius + '&refresh=' + refresh,
+          )
+        },
+        function () {
+          btn.removeAttribute('disabled')
+          btn.textContent = originalText
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 },
+      )
+    })
+  }
+
   function boot() {
     bootGeolocate()
     bootPolling()
     bootFullscreen()
+    bootUpdateLocation()
     bootSettingsEsc()
   }
 
