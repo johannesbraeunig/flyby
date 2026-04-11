@@ -85,12 +85,29 @@ function HomePage() {
           </div>
         ) : null}
 
-        <details class="settings-fab">
-          <summary aria-label="Settings">
-            <span aria-hidden="true">⚙</span>
-          </summary>
-          <div class="settings-panel">
+        {/* Settings overlay: a hidden checkbox toggles a centered
+            modal. Opened by the inline "Settings" link inside the
+            plane-card (label for=settings-toggle). Closed by the
+            backdrop label or the × button inside the panel. Pure
+            CSS, no JS. The checkbox + panel live OUTSIDE #plane-card
+            so they survive the 30 s innerHTML poll. */}
+        <input type="checkbox" id="settings-toggle" class="settings-toggle-input" />
+        <label
+          for="settings-toggle"
+          class="settings-backdrop"
+          aria-hidden="true"
+        ></label>
+        <div class="settings-panel" role="dialog" aria-label="Settings">
+          <div class="settings-panel-header">
             <h2 class="settings-heading">Settings</h2>
+            <label
+              for="settings-toggle"
+              class="settings-close"
+              aria-label="Close settings"
+            >
+              <span aria-hidden="true">×</span>
+            </label>
+          </div>
             <form method="GET" action="/" class="settings-form">
               <label>
                 <span>Latitude</span>
@@ -141,22 +158,21 @@ function HomePage() {
             <button type="button" id="fullscreen-btn" class="settings-secondary">
               Fullscreen
             </button>
-            <p class="settings-meta">
-              Data from{' '}
-              <a href="https://opensky-network.org" rel="noreferrer">
-                OpenSky
-              </a>
-              {' · routes from '}
-              <a href="https://adsbdb.com" rel="noreferrer">
-                adsbdb
-              </a>
-              <br />
-              <a href={REPO_URL} rel="noreferrer">
-                Source on GitHub
-              </a>
-            </p>
-          </div>
-        </details>
+          <p class="settings-meta">
+            Data from{' '}
+            <a href="https://opensky-network.org" rel="noreferrer">
+              OpenSky
+            </a>
+            {' · routes from '}
+            <a href="https://adsbdb.com" rel="noreferrer">
+              adsbdb
+            </a>
+            <br />
+            <a href={REPO_URL} rel="noreferrer">
+              Source on GitHub
+            </a>
+          </p>
+        </div>
 
         <script src="/flyby.js" defer></script>
       </Layout>
@@ -166,24 +182,31 @@ function HomePage() {
 
 function LocatingPage() {
   return () => (
-    <Layout title="FlyBy — locating you">
+    <Layout title="FlyBy — choose location">
       <main class="stage">
         <div class="plane-card">
           <div class="panel" data-fly-state="locating">
-            <div class="panel-line panel-line-1" style="color: #ffaa00">
-              FLYBY
-            </div>
-            <div class="panel-line panel-line-2">LOCATING YOU</div>
-            <div class="panel-line panel-line-3">ALLOW LOCATION</div>
+            <div class="panel-line panel-line-1">FLYBY</div>
+            <div class="panel-line panel-line-2">PICK A</div>
+            <div class="panel-line panel-line-3">LOCATION</div>
           </div>
+          <div class="locating-choices">
+            <button id="allow-location-btn" type="button" class="btn-primary">
+              Use my location
+            </button>
+            <a
+              class="btn-secondary"
+              href={`/?lat=${HAMBURG.lat}&lon=${HAMBURG.lon}&radius=${DEFAULT_RADIUS_KM}`}
+            >
+              Use Hamburg
+            </a>
+          </div>
+          <p class="locating-help">
+            We don't store your coordinates — they only travel between your browser and
+            OpenSky for the duration of a request.
+          </p>
         </div>
       </main>
-      <p class="locating-help">
-        FlyBy needs your location to find aircraft overhead.{' '}
-        <a href={`/?lat=${HAMBURG.lat}&lon=${HAMBURG.lon}&radius=${DEFAULT_RADIUS_KM}`}>
-          Use Hamburg instead
-        </a>
-      </p>
       <script src="/flyby.js" defer></script>
     </Layout>
   )

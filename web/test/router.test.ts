@@ -63,19 +63,32 @@ describe('router', () => {
     let res = await router.fetch('http://localhost/')
     assert.equal(res.status, 200)
     let html = await res.text()
-    assert.match(html, /LOCATING YOU/)
+    // The locating page offers an explicit choice (no auto-prompt).
+    assert.match(html, /PICK A/)
+    assert.match(html, /id="allow-location-btn"/)
+    assert.match(html, /Use my location/)
+    assert.match(html, /Use Hamburg/)
     assert.equal(lastUrl, null) // never hit OpenSky
   })
 
-  it('GET /?lat=53.5511&lon=9.9937 renders a plane card with brand color and route', async () => {
+  it('GET /?lat=53.5511&lon=9.9937 renders airline name, FROM→TO route, and labelled stats', async () => {
     let res = await router.fetch('http://localhost/?lat=53.5511&lon=9.9937')
     assert.equal(res.status, 200)
     let html = await res.text()
-    assert.match(html, /Lufthansa/)
-    assert.match(html, /#F9BA00/i)
-    // Line 2 format is "CALLSIGN  DEST" (destination only, matches photo ref).
-    assert.match(html, /DLH441 {2}FRA/)
-    // Both OpenSky and adsbdb were called during the render.
+    // Line 1: airline name, uppercased, no brand-color style applied.
+    assert.match(html, /LUFTHANSA/)
+    assert.doesNotMatch(html, /panel-line-1[^>]*style="color/)
+    // Line 2: callsign + origin airport + pixel arrow SVG + destination.
+    assert.match(html, /DLH441/)
+    assert.match(html, /IAH/)
+    assert.match(html, /class="pixel-arrow"/)
+    assert.match(html, /FRA/)
+    // Line 3: labelled stats.
+    assert.match(html, /stat-label[^>]*>ALT</)
+    assert.match(html, /stat-label[^>]*>SPD</)
+    assert.match(html, /stat-label[^>]*>DIST</)
+    // Inline Settings link next to the Track link.
+    assert.match(html, /class="panel-link settings-inline-link"/)
   })
 
   it('GET /?denied=1 renders the denied banner with Hamburg fallback', async () => {

@@ -13,33 +13,36 @@
   var DENIED_FALLBACK = '/?denied=1'
 
   function bootGeolocate() {
-    // Only prompt on the locating screen. The home template always
-    // includes a #plane-card; if it's present, the server has already
-    // resolved a location (URL, cookie, or Hamburg fallback after a
-    // denial) and we must not re-prompt — otherwise a denied user
-    // bounces /?denied=1 → denied → /?denied=1 forever.
-    if (document.getElementById('plane-card')) return
+    // Wire the "Use my location" button on the locating page. No
+    // auto-prompt — we only call getCurrentPosition in response to
+    // an explicit user click, which keeps the permission UX clean
+    // and avoids the denied-bounce loop that plagued the old
+    // auto-prompt flow.
+    var btn = document.getElementById('allow-location-btn')
+    if (!btn) return
 
-    var url = new URL(window.location.href)
-    if (url.searchParams.has('lat') && url.searchParams.has('lon')) return
-
-    if (!('geolocation' in navigator)) {
-      window.location.replace(DENIED_FALLBACK)
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      function (pos) {
-        var lat = pos.coords.latitude.toFixed(4)
-        var lon = pos.coords.longitude.toFixed(4)
-        window.location.replace('/?lat=' + lat + '&lon=' + lon)
-      },
-      function () {
-        // Permission denied or unavailable.
+    btn.addEventListener('click', function () {
+      if (!('geolocation' in navigator)) {
         window.location.replace(DENIED_FALLBACK)
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 },
-    )
+        return
+      }
+      btn.setAttribute('disabled', 'disabled')
+      btn.textContent = 'Locating…'
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          var lat = pos.coords.latitude.toFixed(4)
+          var lon = pos.coords.longitude.toFixed(4)
+          window.location.replace('/?lat=' + lat + '&lon=' + lon)
+        },
+        function () {
+          // Permission denied or unavailable — fall through to the
+          // Hamburg default with a flag so the home page can show
+          // the "please unblock" banner.
+          window.location.replace(DENIED_FALLBACK)
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 },
+      )
+    })
   }
 
   function bootPolling() {
@@ -108,6 +111,18 @@
     start()
   }
 
+  function bootSettingsEsc() {
+    // Close the settings modal on Escape. The modal is a pure-CSS
+    // checkbox toggle, so "closing" just means unchecking the box.
+    var checkbox = document.getElementById('settings-toggle')
+    if (!checkbox) return
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && checkbox.checked) {
+        checkbox.checked = false
+      }
+    })
+  }
+
   function bootFullscreen() {
     var btn = document.getElementById('fullscreen-btn')
     if (!btn) return
@@ -129,6 +144,7 @@
     bootGeolocate()
     bootPolling()
     bootFullscreen()
+    bootSettingsEsc()
   }
 
   if (document.readyState === 'loading') {

@@ -78,7 +78,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.25rem;
+  gap: clamp(0.9rem, 2.5vw, 2rem);
   padding: 2.5rem 3rem;
   position: relative;
   width: 100%;
@@ -114,6 +114,53 @@ body {
   opacity: 0.92;
 }
 
+/* Panel stats rows (lines 2 and 3): labelled stats in a row.
+   Labels sit ABOVE the values, tiny and dim; values big and bright.
+   align-items: flex-start keeps the labels visually in line even
+   when one value (e.g. the route with its pixel arrow) renders at
+   a slightly different height from the others. */
+.panel-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: clamp(1.5rem, 5vw, 4rem);
+  opacity: 1;
+}
+
+/* Line 2 stat values are larger than line 3's — line 2 is the
+   main ID (callsign + route), line 3 is the secondary numeric. */
+.panel-line-2 .stat-value {
+  font-size: clamp(3.5rem, 13vw, 11rem);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 0.9;
+}
+
+.stat-label {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.6vw, 2.25rem);
+  color: var(--ui-muted);
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 6px rgba(255, 170, 0, 0.25);
+  text-transform: uppercase;
+  line-height: 0.75;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 10vw, 9rem);
+  color: var(--led-amber-soft);
+  line-height: 0.85;
+  /* Expressed in the value's own em (the large one), so the gap
+     stays minimal regardless of font-size scaling. */
+  margin-top: -0.12em;
+}
+
+
 .panel[data-fly-state='locating'] .panel-line-1 {
   animation: blink 1.4s ease-in-out infinite;
 }
@@ -129,24 +176,58 @@ body {
   text-shadow: none;
 }
 
-/* Subtle map-link below the panel */
-.panel-links {
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  color: var(--ui-muted);
-  letter-spacing: 0.04em;
+/* Pixel arrow for the FROM→TO route — a 9×5 dot-matrix SVG that
+   uses currentColor and inherits the amber glow via drop-shadow.
+   crispEdges keeps the pixels hard. Aspect 9:5; small width so
+   it sits as a separator rather than a dominant glyph. */
+.pixel-arrow {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.42em;
+  vertical-align: 0.25em;
+  margin: 0 0.2em;
+  fill: currentColor;
+  shape-rendering: crispEdges;
+  filter: drop-shadow(0 0 10px var(--led-glow)) drop-shadow(0 0 2px var(--led-glow));
 }
 
-.panel-links a {
+/* Map link + inline Settings link row below the panel */
+.panel-links {
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  color: var(--ui-muted);
+  letter-spacing: 0.04em;
+  display: flex;
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-link {
   color: inherit;
   text-decoration: none;
   border-bottom: 1px dotted var(--ui-border);
   padding-bottom: 2px;
+  cursor: pointer;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font: inherit;
 }
 
-.panel-links a:hover {
+.panel-link:hover {
   color: var(--led-amber);
   border-bottom-color: var(--led-amber);
+}
+
+.panel-link-sep {
+  margin: 0 0.15rem;
+  color: var(--ui-border);
+}
+
+.settings-inline-link {
+  user-select: none;
 }
 
 /* ───── Denied banner ───── */
@@ -176,74 +257,147 @@ body {
   text-decoration: underline;
 }
 
-/* ───── Locating help ───── */
+/* ───── Locating page ───── */
+
+.locating-choices {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-primary,
+.btn-secondary {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0.9rem 1.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.btn-primary {
+  background: var(--led-amber);
+  color: #120803;
+  border: 1px solid var(--led-amber);
+  box-shadow: 0 0 24px rgba(255, 170, 0, 0.35);
+}
+
+.btn-primary:hover {
+  background: var(--led-amber-soft);
+  border-color: var(--led-amber-soft);
+}
+
+.btn-primary[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--led-amber);
+  border: 1px solid var(--ui-border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--led-amber);
+}
 
 .locating-help {
-  position: fixed;
-  bottom: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
+  margin-top: 1.5rem;
   font-family: var(--font-ui);
   font-size: 0.85rem;
   color: var(--ui-muted);
   text-align: center;
+  max-width: 28rem;
 }
 
-.locating-help a {
-  color: var(--led-amber);
+/* ───── Settings modal (centered overlay) ─────
+   A hidden checkbox toggles a full-screen backdrop + a centered
+   panel. Opened by the inline "Settings" label inside the
+   plane-card. Closed by clicking the backdrop or the × label
+   inside the panel. Both are <label for="settings-toggle">
+   elements that uncheck the checkbox. Pure CSS, no JS.
+   The checkbox + backdrop + panel live OUTSIDE #plane-card so
+   they survive the 30 s innerHTML poll. */
+
+.settings-toggle-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
 }
 
-/* ───── Settings FAB (floating gear) ───── */
-
-.settings-fab {
+.settings-backdrop {
+  display: none;
   position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 20;
+  inset: 0;
+  background: rgba(4, 2, 0, 0.72);
+  backdrop-filter: blur(3px);
+  z-index: 30;
+  cursor: pointer;
 }
 
-.settings-fab summary {
-  list-style: none;
-  width: 2.75rem;
-  height: 2.75rem;
-  display: grid;
-  place-items: center;
+.settings-panel {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.5rem 1.5rem 1.25rem;
   background: var(--ui-panel-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 6px;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
+  font-family: var(--font-ui);
+  z-index: 40;
+}
+
+.settings-toggle-input:checked ~ .settings-backdrop,
+.settings-toggle-input:checked ~ .settings-panel {
+  display: block;
+}
+
+.settings-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.settings-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
   color: var(--ui-muted);
-  font-size: 1.3rem;
   cursor: pointer;
-  backdrop-filter: blur(6px);
+  font-size: 1.25rem;
+  line-height: 1;
+  user-select: none;
   transition:
     color 120ms ease,
     border-color 120ms ease;
 }
 
-.settings-fab summary::-webkit-details-marker {
-  display: none;
-}
-.settings-fab summary::marker {
-  display: none;
-}
-
-.settings-fab summary:hover {
+.settings-close:hover {
   color: var(--led-amber);
   border-color: var(--led-amber);
-}
-
-.settings-panel {
-  position: absolute;
-  top: 3.25rem;
-  right: 0;
-  width: min(22rem, calc(100vw - 2rem));
-  padding: 1.25rem 1.25rem 1rem;
-  background: var(--ui-panel-bg);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  font-family: var(--font-ui);
 }
 
 .settings-heading {
@@ -251,8 +405,8 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--ui-muted);
-  margin-bottom: 0.75rem;
   font-weight: 500;
+  margin: 0;
 }
 
 .settings-form {

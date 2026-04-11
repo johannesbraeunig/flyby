@@ -69,23 +69,35 @@ function liveMapUrl(icao24: string): string {
   return `https://globe.adsbexchange.com/?icao=${encodeURIComponent(icao24.toLowerCase())}`
 }
 
-// Format line 2 to match the reference photo: "CALLSIGN  DEST".
-// We display the *destination* airport code only (not origin→dest)
-// because the dot-matrix grid in the photo has room for ~12 chars
-// and "DLH441  JFK" reads at a glance. Origin still shows in the
-// aria-label.
-function formatLine2(flight: string, route: RouteInfo | null): string {
-  if (!route) return flight
-  return `${flight}  ${route.destinationIata}`
-}
-
-// Format line 3: "FL361  465  3.1KM" — altitude, speed (kt), distance,
-// compressed to fit the ~14-char dot-matrix width.
-function formatLine3(plane: Plane): string {
-  let fl = formatFlightLevel(plane.altMeters)
-  let kt = formatSpeedCompact(plane.velocityMps).padStart(3)
-  let km = formatDistanceCompact(plane.distanceKm)
-  return `${fl}  ${kt}  ${km}`
+// Pixel-style right arrow for the FROM→TO route line. Jersey 10
+// doesn't ship a glyph for U+2192, so a fallback font was rendering
+// the arrow as a smooth serif character — very out of place next to
+// the LED text. This is a 9×5 dot-matrix arrow: a single-row shaft
+// spanning the full width, topped and tailed by a 3-row wedge that
+// narrows to the point. Using `currentColor` + `filter: drop-shadow`
+// so it inherits the amber glow.
+//
+//  col: 0 1 2 3 4 5 6 7 8
+//  row 0:              X
+//  row 1:              X X
+//  row 2: X X X X X X X X X
+//  row 3:              X X
+//  row 4:              X
+function PixelArrow() {
+  return () => (
+    <svg
+      class="pixel-arrow"
+      viewBox="0 0 9 5"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="6" y="0" width="1" height="1" />
+      <rect x="6" y="1" width="2" height="1" />
+      <rect x="0" y="2" width="9" height="1" />
+      <rect x="6" y="3" width="2" height="1" />
+      <rect x="6" y="4" width="1" height="1" />
+    </svg>
+  )
 }
 
 function PanelOk() {
@@ -103,11 +115,11 @@ function PanelOk() {
     let { icao, number } = splitCallsign(plane.callsign)
     let airline = lookupAirline(plane.callsign)
     let displayName = airline?.name ?? (plane.originCountry || icao || 'AIRCRAFT')
-    let color = airline?.hex ?? '#ffaa00'
     let line1 = displayName.toUpperCase().slice(0, 14)
-    let flight = `${icao}${number}`.slice(0, 8)
-    let line2 = formatLine2(flight, route).toUpperCase()
-    let line3 = formatLine3(plane)
+    let flight = `${icao}${number}`.slice(0, 8).toUpperCase()
+    let altStr = formatFlightLevel(plane.altMeters)
+    let kt = `${formatSpeedCompact(plane.velocityMps)}KT`
+    let km = formatDistanceCompact(plane.distanceKm)
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
       : ''
@@ -121,21 +133,53 @@ function PanelOk() {
           aria-live="polite"
           aria-label={aria}
         >
-          <div class="panel-line panel-line-1" style={`color: ${color}`} aria-hidden="true">
+          {/* Line 1 stays in the standard LED amber regardless of
+              airline — the brand-color version was noisy. */}
+          <div class="panel-line panel-line-1" aria-hidden="true">
             {line1}
           </div>
-          <div class="panel-line panel-line-2" aria-hidden="true">
-            {line2}
+          <div class="panel-line panel-line-2 panel-stats" aria-hidden="true">
+            <span class="stat">
+              <span class="stat-label">FLIGHT</span>
+              <span class="stat-value">{flight}</span>
+            </span>
+            {route ? (
+              <span class="stat">
+                <span class="stat-label">ROUTE</span>
+                <span class="stat-value">
+                  {route.originIata}
+                  <PixelArrow />
+                  {route.destinationIata}
+                </span>
+              </span>
+            ) : null}
           </div>
-          <div class="panel-line panel-line-3" aria-hidden="true">
-            {line3}
+          <div class="panel-line panel-line-3 panel-stats" aria-hidden="true">
+            <span class="stat">
+              <span class="stat-label">ALT</span>
+              <span class="stat-value">{altStr}</span>
+            </span>
+            <span class="stat">
+              <span class="stat-label">SPD</span>
+              <span class="stat-value">{kt}</span>
+            </span>
+            <span class="stat">
+              <span class="stat-label">DIST</span>
+              <span class="stat-value">{km}</span>
+            </span>
           </div>
           {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
         </div>
         <p class="panel-links">
-          <a href={liveMapUrl(plane.icao24)} target="_blank" rel="noreferrer">
+          <a class="panel-link" href={liveMapUrl(plane.icao24)} target="_blank" rel="noreferrer">
             Track {plane.icao24.toUpperCase()} ↗
           </a>
+          <span class="panel-link-sep" aria-hidden="true">
+            {' · '}
+          </span>
+          <label for="settings-toggle" class="panel-link settings-inline-link">
+            Settings
+          </label>
         </p>
       </>
     )
