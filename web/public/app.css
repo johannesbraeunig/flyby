@@ -1,0 +1,237 @@
+/* FlyBy web — LED-board-styled plane display.
+   Visually mirrors the firmware's 64×32 P4 HUB75 panel:
+   3 lines of monospace text on a black background, line 1
+   in the airline brand color, lines 2/3 in white.
+*/
+
+:root {
+  --bg: #0a0a0a;
+  --fg: #e0e0e0;
+  --muted: #888;
+  --warn: #ffcc00;
+  --error: #e81932;
+  --panel-bg: #000;
+  --panel-text: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.25rem;
+  letter-spacing: 0.05em;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.page-footer {
+  margin-top: 3rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.page-footer a {
+  color: var(--muted);
+}
+
+/* The LED panel itself. Aspect ratio matches 64×32 (2:1).
+   Width fills the container, height follows. The font scales
+   so that 16 monospace characters fit across one line. */
+.panel {
+  background: var(--panel-bg);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--panel-text);
+  box-shadow: 0 0 0 2px #1a1a1a, 0 0 24px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-line {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(1rem, 4.5vw, 1.6rem);
+  line-height: 1.2;
+}
+
+.panel-line-1 {
+  font-size: clamp(1.1rem, 5vw, 1.85rem);
+}
+
+.panel-line-2,
+.panel-line-3 {
+  color: var(--panel-text);
+}
+
+.panel[data-fly-state='locating'] .panel-line-1 {
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+.panel-stale-banner {
+  position: absolute;
+  bottom: 0.4rem;
+  right: 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--warn);
+  font-family: -apple-system, sans-serif;
+  font-weight: 500;
+}
+
+.banner {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.banner-warn {
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.4);
+  color: var(--warn);
+}
+
+.banner a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.locating {
+  text-align: center;
+}
+
+.locating-help {
+  color: var(--muted);
+  font-size: 0.85rem;
+  max-width: 36rem;
+  margin: 1rem auto 0;
+}
+
+.locating-help a {
+  color: var(--fg);
+}
+
+.settings {
+  margin-top: 2rem;
+  padding: 1rem 1.25rem;
+  background: #141414;
+  border-radius: 6px;
+  border: 1px solid #222;
+}
+
+.settings summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.settings summary:hover {
+  color: var(--fg);
+}
+
+.settings-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+  align-items: end;
+}
+
+.settings-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-form input {
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  background: #000;
+  border: 1px solid #333;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.95rem;
+  border-radius: 4px;
+}
+
+.settings-form button {
+  grid-column: 1 / -1;
+  padding: 0.6rem;
+  background: var(--fg);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-form button:hover {
+  background: #fff;
+}
+
+.settings-meta {
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel[data-fly-state='locating'] .panel-line-1 {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-form {
+    grid-template-columns: 1fr;
+  }
+}
