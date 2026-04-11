@@ -259,8 +259,9 @@ body {
 }
 
 .panel-link-sep {
-  margin: 0 0.15rem;
+  margin: 0 0.75rem;
   color: var(--ui-border);
+  user-select: none;
 }
 
 .settings-inline-link {

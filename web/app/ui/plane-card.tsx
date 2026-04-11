@@ -85,7 +85,7 @@ export function PlaneCard() {
                 Track {trackIcao24.toUpperCase()} ↗
               </a>
               <span class="panel-link-sep" aria-hidden="true">
-                {' · '}
+                |
               </span>
             </>
           ) : null}
