@@ -13,7 +13,13 @@
   var DENIED_FALLBACK = '/?denied=1'
 
   function bootGeolocate() {
-    // Already located? Nothing to do.
+    // Only prompt on the locating screen. The home template always
+    // includes a #plane-card; if it's present, the server has already
+    // resolved a location (URL, cookie, or Hamburg fallback after a
+    // denial) and we must not re-prompt — otherwise a denied user
+    // bounces /?denied=1 → denied → /?denied=1 forever.
+    if (document.getElementById('plane-card')) return
+
     var url = new URL(window.location.href)
     if (url.searchParams.has('lat') && url.searchParams.has('lon')) return
 

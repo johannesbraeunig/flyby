@@ -55,8 +55,9 @@ function HomePage() {
       <Layout title="FlyBy — nearest plane">
         {location.fallbackReason === 'denied' ? (
           <div class="banner banner-warn">
-            Location permission denied. Showing flights over <strong>Hamburg</strong> as a fallback.{' '}
-            <a href="?">Try again</a>
+            Location permission denied. Showing flights over <strong>Hamburg</strong> as a fallback.
+            Unblock location for this site in your browser (click the icon in the address bar →
+            Location → Allow), then <a href="/">try again</a>.
           </div>
         ) : null}
 
