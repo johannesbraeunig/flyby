@@ -278,12 +278,15 @@ body {
 
 /* Vertical-rate arrow sits next to the altitude value on line 3.
    It's a 5×7 portrait-aspect SVG (override the horizontal arrow's
-   dimensions) with the same glow + crispEdges styling. Symmetric
-   margins since it's not acting as a separator. */
+   dimensions) with the same glow + crispEdges styling. Sized a
+   bit smaller than the Jersey 10 cap-height so it never appears
+   larger than the digits it sits next to, and nudged just above
+   the baseline so it visually fits within the character bounds
+   rather than hanging below them. */
 .pixel-arrow-vert {
-  width: 0.4em;
-  height: 0.56em;
-  vertical-align: -0.1em;
+  width: 0.32em;
+  height: 0.45em;
+  vertical-align: 0.05em;
   margin: 0 0.05em 0 0.15em;
 }
 
