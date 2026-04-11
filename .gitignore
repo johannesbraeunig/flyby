@@ -3,6 +3,7 @@
 .piolibdeps/
 .vscode/
 .wokwi/
+compile_commands.json
 *.elf
 *.bin
 *.hex
