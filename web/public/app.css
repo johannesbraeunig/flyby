@@ -290,6 +290,18 @@ body {
   margin: 0 0.05em 0 0.15em;
 }
 
+/* Pixel degree glyph — a 5×5 hollow ring that replaces the `°`
+   character on the LOOK stat. Floated high (superscript-style)
+   and small enough to read as an indicator mark rather than a
+   digit. Minimal left margin so it sits tight against the
+   preceding number. */
+.pixel-degree {
+  width: 0.2em;
+  height: 0.2em;
+  vertical-align: 0.55em;
+  margin-left: 0.02em;
+}
+
 /* Map link + inline Settings link row, sitting immediately under
    the panel inside .plane-card (which has gap: 0). Left-aligned
    with the panel's content. */
