@@ -1,3 +1,4 @@
+import type { AircraftInfo } from '../data/aircraft.ts'
 import type { NearestResult, Plane } from '../data/opensky.ts'
 import type { RouteInfo } from '../data/routes.ts'
 import { lookupAirline } from '../data/airlines.ts'
@@ -13,18 +14,20 @@ import {
 export interface PlaneCardProps {
   result: NearestResult
   route: RouteInfo | null
+  aircraft: AircraftInfo | null
 }
 
-// Render the LED-style 3-line panel for any NearestResult variant.
-// Shape mirrors the firmware's HUB75 layout: line 1 airline in the
-// airline brand color, lines 2/3 in amber.
+// Render the LED-style panel for any NearestResult variant. The
+// success panel has 4 lines: airline, flight+route, aircraft type,
+// and the ALT/SPD/DIST stats row.
 export function PlaneCard() {
-  return ({ result, route }: PlaneCardProps) => {
+  return ({ result, route, aircraft }: PlaneCardProps) => {
     if (result.kind === 'ok' || result.kind === 'ok-stale') {
       return (
         <PanelOk
           plane={result.plane}
           route={route}
+          aircraft={aircraft}
           stale={result.kind === 'ok-stale'}
           note={result.kind === 'ok-stale' ? result.reason : null}
         />
@@ -104,11 +107,13 @@ function PanelOk() {
   return ({
     plane,
     route,
+    aircraft,
     stale,
     note,
   }: {
     plane: Plane
     route: RouteInfo | null
+    aircraft: AircraftInfo | null
     stale: boolean
     note: string | null
   }) => {
@@ -123,7 +128,8 @@ function PanelOk() {
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
       : ''
-    let aria = `${displayName} flight ${flight}${routeAria}, ${formatFlightLevel(plane.altMeters)}, ${formatSpeed(plane.velocityMps)}, ${formatDistance(plane.distanceKm)} away`
+    let aircraftAria = aircraft ? `, ${aircraft.typeName || aircraft.icaoType}` : ''
+    let aria = `${displayName} flight ${flight}${routeAria}${aircraftAria}, ${formatFlightLevel(plane.altMeters)}, ${formatSpeed(plane.velocityMps)}, ${formatDistance(plane.distanceKm)} away`
     return (
       <>
         <div
@@ -168,6 +174,14 @@ function PanelOk() {
               <span class="stat-value">{km}</span>
             </span>
           </div>
+          {aircraft?.icaoType ? (
+            <div class="panel-line panel-line-type panel-stats" aria-hidden="true">
+              <span class="stat">
+                <span class="stat-label">TYPE</span>
+                <span class="stat-value">{aircraft.icaoType}</span>
+              </span>
+            </div>
+          ) : null}
           {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
         </div>
         <p class="panel-links">

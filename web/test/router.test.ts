@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 
 import { router } from '../app/router.ts'
+import { __resetAircraftCacheForTests } from '../app/data/aircraft.ts'
 import { __resetCacheForTests } from '../app/data/opensky.ts'
 import { __resetRouteCacheForTests } from '../app/data/routes.ts'
 
@@ -18,7 +19,7 @@ const OPENSKY_BODY = JSON.stringify({
   ],
 })
 
-const ADSBDB_BODY = JSON.stringify({
+const ADSBDB_CALLSIGN_BODY = JSON.stringify({
   response: {
     flightroute: {
       callsign: 'DLH441',
@@ -28,11 +29,25 @@ const ADSBDB_BODY = JSON.stringify({
   },
 })
 
+const ADSBDB_AIRCRAFT_BODY = JSON.stringify({
+  response: {
+    aircraft: {
+      type: 'Airbus A330-300',
+      icao_type: 'A333',
+      manufacturer: 'Airbus',
+      mode_s: 'ABC123',
+      registration: 'D-ABYS',
+      registered_owner: 'Lufthansa',
+    },
+  },
+})
+
 beforeEach(() => {
   originalFetch = globalThis.fetch
   lastUrl = null
   __resetCacheForTests()
   __resetRouteCacheForTests()
+  __resetAircraftCacheForTests()
   globalThis.fetch = (async (input: Request | URL | string) => {
     let urlStr = typeof input === 'string' ? input : input.toString()
     lastUrl = urlStr
@@ -42,8 +57,15 @@ beforeEach(() => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    if (urlStr.includes('adsbdb.com')) {
-      return new Response(ADSBDB_BODY, {
+    // Route two different adsbdb endpoints: /v0/callsign/* and /v0/aircraft/*
+    if (urlStr.includes('adsbdb.com/v0/callsign/')) {
+      return new Response(ADSBDB_CALLSIGN_BODY, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    if (urlStr.includes('adsbdb.com/v0/aircraft/')) {
+      return new Response(ADSBDB_AIRCRAFT_BODY, {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -56,6 +78,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch
   __resetCacheForTests()
   __resetRouteCacheForTests()
+  __resetAircraftCacheForTests()
 })
 
 describe('router', () => {
@@ -83,7 +106,10 @@ describe('router', () => {
     assert.match(html, /IAH/)
     assert.match(html, /class="pixel-arrow"/)
     assert.match(html, /FRA/)
-    // Line 3: labelled stats.
+    // TYPE line (aircraft type from the adsbdb /aircraft/ endpoint).
+    assert.match(html, /stat-label[^>]*>TYPE</)
+    assert.match(html, /A333/)
+    // Stats line: labelled ALT / SPD / DIST.
     assert.match(html, /stat-label[^>]*>ALT</)
     assert.match(html, /stat-label[^>]*>SPD</)
     assert.match(html, /stat-label[^>]*>DIST</)

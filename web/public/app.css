@@ -56,9 +56,11 @@ body {
 
 .stage {
   flex: 1;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: clamp(1.5rem, 5vh, 4rem) 1rem 1rem;
   min-height: 0;
 }
 
@@ -108,7 +110,8 @@ body {
   color: var(--led-amber-soft);
 }
 
-.panel-line-3 {
+.panel-line-3,
+.panel-line-type {
   font-size: clamp(2.25rem, 8vw, 7rem);
   color: var(--led-amber-soft);
   opacity: 0.92;
@@ -141,6 +144,7 @@ body {
 .panel-line-2 .stat-value {
   font-size: clamp(2.75rem, 10vw, 9rem);
 }
+
 
 .stat {
   display: flex;
@@ -187,17 +191,19 @@ body {
 
 /* Pixel arrow for the FROM→TO route — a 9×5 dot-matrix SVG that
    uses currentColor and inherits the amber glow via drop-shadow.
-   crispEdges keeps the pixels hard. Aspect 9:5; small width so
-   it sits as a separator rather than a dominant glyph. */
+   crispEdges keeps the pixels hard. Aspect 9:5; kept narrow so it
+   reads as a separator, not a dominant glyph. `vertical-align:
+   middle` centers it with the text midline instead of the
+   baseline. */
 .pixel-arrow {
   display: inline-block;
-  width: 0.75em;
-  height: 0.42em;
-  vertical-align: 0.25em;
-  margin: 0 0.2em;
+  width: 0.55em;
+  height: 0.31em;
+  vertical-align: middle;
+  margin: 0 0.22em;
   fill: currentColor;
   shape-rendering: crispEdges;
-  filter: drop-shadow(0 0 10px var(--led-glow)) drop-shadow(0 0 2px var(--led-glow));
+  filter: drop-shadow(0 0 8px var(--led-glow)) drop-shadow(0 0 2px var(--led-glow));
 }
 
 /* Map link + inline Settings link row below the panel */

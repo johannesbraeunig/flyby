@@ -1,5 +1,6 @@
 import type { BuildAction } from 'remix/fetch-router'
 
+import { getAircraft } from '../data/aircraft.ts'
 import { getNearestAircraft } from '../data/opensky.ts'
 import { getRoute } from '../data/routes.ts'
 import {
@@ -32,13 +33,18 @@ export let home: BuildAction<'GET', typeof routes.home> = {
 
     let result = await getNearestAircraft(location.lat, location.lon, location.radiusKm)
 
-    // Enrich with route info when we have a plane. The route lookup is
-    // cached aggressively (1h per callsign) so this is usually a Map
-    // hit; on a cold callsign it adds ~300 ms over OpenSky, which is
-    // acceptable for the home render.
+    // Enrich with route + aircraft-type info when we have a plane.
+    // Fetched in parallel via Promise.all so the extra lookup is
+    // free latency-wise (both cache aggressively — usually Map hits).
     let route = null
-    if ((result.kind === 'ok' || result.kind === 'ok-stale') && result.plane.callsign) {
-      route = await getRoute(result.plane.callsign)
+    let aircraft = null
+    if (result.kind === 'ok' || result.kind === 'ok-stale') {
+      let [r, a] = await Promise.all([
+        result.plane.callsign ? getRoute(result.plane.callsign) : Promise.resolve(null),
+        getAircraft(result.plane.icao24),
+      ])
+      route = r
+      aircraft = a
     }
 
     let headers = new Headers({ 'Cache-Control': 'no-store' })
@@ -47,7 +53,10 @@ export let home: BuildAction<'GET', typeof routes.home> = {
       headers.append('Set-Cookie', locationCookieValue(location))
     }
 
-    return render(<HomePage location={location} result={result} route={route} />, { headers })
+    return render(
+      <HomePage location={location} result={result} route={route} aircraft={aircraft} />,
+      { headers },
+    )
   },
 }
 
@@ -55,12 +64,13 @@ interface HomePageProps {
   location: ResolvedLocation
   result: Awaited<ReturnType<typeof getNearestAircraft>>
   route: Awaited<ReturnType<typeof getRoute>>
+  aircraft: Awaited<ReturnType<typeof getAircraft>>
 }
 
 const REPO_URL = 'https://github.com/johannesbraeunig/flyby'
 
 function HomePage() {
-  return ({ location, result, route }: HomePageProps) => {
+  return ({ location, result, route, aircraft }: HomePageProps) => {
     let pollUrl =
       `/api/nearest?lat=${location.lat}` +
       `&lon=${location.lon}` +
@@ -74,7 +84,7 @@ function HomePage() {
             data-fly-poll={pollUrl}
             data-fly-interval={String(location.refreshSec)}
           >
-            <PlaneCard result={result} route={route} />
+            <PlaneCard result={result} route={route} aircraft={aircraft} />
           </div>
         </main>
 
