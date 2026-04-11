@@ -17,10 +17,15 @@
 // while the flight is in progress), this is comfortably within
 // budget for FlyBy's 30 s polling cadence.
 
+import { fetchBoundedJson } from '../utils/fetch-json.ts'
+
 const TRACKS_URL = 'https://opensky-network.org/api/tracks/all'
 const FETCH_TIMEOUT_MS = 4_000
 const CACHE_TTL_MS = 60 * 1_000 // 60 s — tracks extend but the start doesn't move
 const CACHE_MAX_ENTRIES = 200
+// Typical track payload is ~25 KB; long-haul can hit ~100 KB.
+// 512 KB is generous headroom while still OOM-safe.
+const MAX_BODY_BYTES = 512 * 1024
 
 export interface TrackStart {
   lat: number
@@ -91,28 +96,26 @@ export async function getTrackStart(icao24: string): Promise<TrackStart | null> 
     let url = new URL(TRACKS_URL)
     url.searchParams.set('icao24', key)
     url.searchParams.set('time', '0')
-    let res = await fetch(url, {
+    let result = await fetchBoundedJson(url.toString(), {
       signal: controller.signal,
-      headers: {
-        'User-Agent': 'flyby-web/0.1 (https://github.com/johannesbraeunig/flyby)',
-      },
+      maxBytes: MAX_BODY_BYTES,
     })
-    if (!res.ok) {
-      // Includes 404 ("no track for this aircraft"), 429 (rate
-      // limited), 5xx. Cache null so we don't retry immediately.
+    if (!result.ok) {
+      // HTTP error / too-large / parse error. Includes 404 ("no
+      // track for this aircraft"), 429 (rate limited), 5xx, and
+      // oversized bodies. Cache null so we don't retry immediately.
       cache.delete(key)
       cache.set(key, { value: null, expires: Date.now() + CACHE_TTL_MS })
       evictIfFull()
       return null
     }
-    let json = await res.json()
-    let track = parseOpenSkyTrack(json)
+    let track = parseOpenSkyTrack(result.json)
     cache.delete(key)
     cache.set(key, { value: track, expires: Date.now() + CACHE_TTL_MS })
     evictIfFull()
     return track
   } catch {
-    // Timeout / network / parse — don't cache so we retry next tick.
+    // Timeout / network — don't cache so we retry next tick.
     return null
   } finally {
     clearTimeout(timer)

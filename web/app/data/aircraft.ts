@@ -7,11 +7,15 @@
 // and some European fleets); hexdb fills those in. Same negative-
 // caching rules as the route lookup.
 
+import { fetchBoundedJson } from '../utils/fetch-json.ts'
+
 const ADSBDB_URL = 'https://api.adsbdb.com/v0/aircraft/'
 const HEXDB_URL = 'https://hexdb.io/api/v1/aircraft/'
 const FETCH_TIMEOUT_MS = 3_000
 const CACHE_TTL_MS = 24 * 60 * 60 * 1_000 // 24 hours
 const CACHE_MAX_ENTRIES = 500
+// Aircraft payloads are a few hundred bytes; 16 KB is huge headroom.
+const MAX_BODY_BYTES = 16 * 1024
 
 export interface AircraftInfo {
   icaoType: string // 4-char ICAO type designator, e.g. "A333"
@@ -105,7 +109,9 @@ export function parseHexdbAircraft(json: unknown): AircraftInfo | null {
   }
 }
 
-// Small wrapper: fetch + parse from one source, with its own timeout.
+// Small wrapper: bounded fetch + parse from one source, with its
+// own timeout. Returns null on any failure (HTTP, network, timeout,
+// too-large, parse).
 async function tryFetch(
   url: string,
   parse: (json: unknown) => AircraftInfo | null,
@@ -113,13 +119,12 @@ async function tryFetch(
   let controller = new AbortController()
   let timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    let res = await fetch(url, {
+    let result = await fetchBoundedJson(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'flyby-web/0.1 (https://github.com/johannesbraeunig/flyby)' },
+      maxBytes: MAX_BODY_BYTES,
     })
-    if (!res.ok) return null
-    let json = await res.json()
-    return parse(json)
+    if (!result.ok) return null
+    return parse(result.json)
   } catch {
     return null
   } finally {

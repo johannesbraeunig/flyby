@@ -29,14 +29,20 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
 // Approximate lat/lon bounding box around (lat, lon) covering the given
 // radius. The box is over-inclusive (a square in lat/lon space, not a
 // true circle), which is what OpenSky's bbox query expects.
+//
+// Latitude is clamped to [-90, 90] and longitude to [-180, 180] at the
+// edges — at the poles or near the antimeridian, a naïve bbox would
+// spill out of valid coordinate space and OpenSky would reject it.
+// Clamping gives a truncated (but valid) box; good enough for a display
+// that realistically isn't used from inside the Arctic Circle.
 export function bboxFor(lat: number, lon: number, radiusKm: number): BBox {
   let dLat = radiusKm / KM_PER_DEG_LAT
   let cosLat = Math.cos(lat * DEG_TO_RAD)
   let dLon = cosLat > 1e-9 ? radiusKm / (KM_PER_DEG_LAT * cosLat) : 180
   return {
-    lamin: lat - dLat,
-    lomin: lon - dLon,
-    lamax: lat + dLat,
-    lomax: lon + dLon,
+    lamin: Math.max(-90, lat - dLat),
+    lomin: Math.max(-180, lon - dLon),
+    lamax: Math.min(90, lat + dLat),
+    lomax: Math.min(180, lon + dLon),
   }
 }

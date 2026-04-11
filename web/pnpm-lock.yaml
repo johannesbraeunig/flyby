@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       remix:
-        specifier: next
+        specifier: 3.0.0-alpha.4
         version: 3.0.0-alpha.4
       tsx:
         specifier: ^4.20.6

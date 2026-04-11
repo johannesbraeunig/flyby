@@ -9,6 +9,7 @@
 // same area share results, plus stale-on-429 to keep the page useful
 // when the API briefly hates us.
 
+import { fetchBoundedJson } from '../utils/fetch-json.ts'
 import { bboxFor, haversineKm, type BBox } from './geo.ts'
 
 const OPENSKY_URL = 'https://opensky-network.org/api/states/all'
@@ -16,6 +17,9 @@ const FETCH_TIMEOUT_MS = 8_000
 const CACHE_TTL_MS = 15_000
 const CACHE_MAX_ENTRIES = 100
 const BBOX_ROUND_DEG = 0.1 // ~11 km granularity for cache keys
+// /states/all for a continent-sized bbox is typically ~500 KB.
+// Allow 4 MB to tolerate busy airspace (Europe / US East Coast).
+const MAX_BODY_BYTES = 4 * 1024 * 1024
 
 // One aircraft as we care about it. `distanceKm` is computed per-call
 // against the observer that asked for it; do not store baked distances
@@ -139,7 +143,8 @@ export function rankByDistance(
   return out
 }
 
-// Fetch states from OpenSky for the given bbox. Throws on network error.
+// Fetch states from OpenSky for the given bbox. Throws on network error
+// or non-2xx HTTP; the caller's try/catch handles all failure modes.
 async function fetchStates(bbox: BBox, signal: AbortSignal): Promise<unknown> {
   let url = new URL(OPENSKY_URL)
   url.searchParams.set('lamin', bbox.lamin.toFixed(4))
@@ -147,21 +152,30 @@ async function fetchStates(bbox: BBox, signal: AbortSignal): Promise<unknown> {
   url.searchParams.set('lamax', bbox.lamax.toFixed(4))
   url.searchParams.set('lomax', bbox.lomax.toFixed(4))
 
-  let res = await fetch(url, {
+  let result = await fetchBoundedJson(url.toString(), {
     signal,
-    headers: { 'User-Agent': 'flyby-web/0.1 (https://github.com/jbya/flyby)' },
+    maxBytes: MAX_BODY_BYTES,
   })
-  if (res.status === 429) {
-    let retryAfter = res.headers.get('retry-after')
-    let err = new Error('rate-limited') as Error & { rateLimited: true; retryAfterSec: number | null }
+
+  if (result.ok) return result.json
+
+  if (result.status === 429) {
+    let retryAfter = result.headers.get('retry-after')
+    let err = new Error('rate-limited') as Error & {
+      rateLimited: true
+      retryAfterSec: number | null
+    }
     err.rateLimited = true
     err.retryAfterSec = retryAfter ? Number.parseInt(retryAfter, 10) || null : null
     throw err
   }
-  if (!res.ok) {
-    throw new Error(`OpenSky HTTP ${res.status}`)
+  if (result.reason === 'too-large') {
+    throw new Error(`OpenSky response exceeded ${MAX_BODY_BYTES} byte cap`)
   }
-  return await res.json()
+  if (result.reason === 'parse') {
+    throw new Error('OpenSky response parse error')
+  }
+  throw new Error(`OpenSky HTTP ${result.status}`)
 }
 
 // Public entrypoint: get the nearest airborne aircraft to (lat, lon)
@@ -193,16 +207,25 @@ export async function getNearestAircraft(
     return pickFromCached(entry, observed)
   } catch (raw) {
     let err = raw as Error & { rateLimited?: boolean; retryAfterSec?: number | null; name?: string }
-    // 429: serve stale if we have any
+    // 429: serve stale if we have any.
     if (err.rateLimited) {
+      console.warn(
+        `[opensky] 429 rate-limited (retry in ${err.retryAfterSec ?? '~10'}s) for ` +
+          `${observed.lat.toFixed(2)},${observed.lon.toFixed(2)} r=${observed.radiusKm}`,
+      )
       if (cached) {
         return staleFromCached(cached, observed, `rate limited; retry in ${err.retryAfterSec ?? '~10'}s`)
       }
       return { kind: 'rate-limited', observed, retryAfterSec: err.retryAfterSec ?? null }
     }
-    // Timeout / network: serve stale if we have any
+    // Timeout / network: serve stale if we have any.
+    let reason = err.name === 'AbortError' ? 'OpenSky timeout' : err.message || 'OpenSky error'
+    console.warn(
+      `[opensky] ${reason} for ${observed.lat.toFixed(2)},${observed.lon.toFixed(2)} ` +
+        `r=${observed.radiusKm}${cached ? ' (serving stale)' : ''}`,
+    )
     if (cached) {
-      return staleFromCached(cached, observed, err.name === 'AbortError' ? 'OpenSky timeout' : err.message || 'OpenSky error')
+      return staleFromCached(cached, observed, reason)
     }
     return { kind: 'error', observed, message: err.message || String(err) }
   } finally {
@@ -232,9 +255,13 @@ export function selectNearestPreferringCommercial(ranked: ReadonlyArray<Plane>):
   return ranked[0] ?? null
 }
 
-function pickFromCached(
+// Build a NearestResult from a cache entry + observer position.
+// Shared between the fresh-cache path and the stale-on-429 path;
+// the `stale` argument flips the result variant.
+function buildResult(
   entry: CacheEntry,
   observed: { lat: number; lon: number; radiusKm: number },
+  stale: false | { reason: string },
 ): NearestResult {
   let ranked = rankByDistance(entry.positions, observed.lat, observed.lon)
   let candidates = ranked.filter((p) => p.distanceKm <= observed.radiusKm)
@@ -242,7 +269,24 @@ function pickFromCached(
   if (!pick) {
     return { kind: 'empty', observed, fetchedAt: entry.fetchedAt }
   }
+  if (stale) {
+    return {
+      kind: 'ok-stale',
+      plane: pick,
+      observed,
+      fetchedAt: entry.fetchedAt,
+      stale: true,
+      reason: stale.reason,
+    }
+  }
   return { kind: 'ok', plane: pick, observed, fetchedAt: entry.fetchedAt, stale: false }
+}
+
+function pickFromCached(
+  entry: CacheEntry,
+  observed: { lat: number; lon: number; radiusKm: number },
+): NearestResult {
+  return buildResult(entry, observed, false)
 }
 
 function staleFromCached(
@@ -250,13 +294,7 @@ function staleFromCached(
   observed: { lat: number; lon: number; radiusKm: number },
   reason: string,
 ): NearestResult {
-  let ranked = rankByDistance(entry.positions, observed.lat, observed.lon)
-  let candidates = ranked.filter((p) => p.distanceKm <= observed.radiusKm)
-  let pick = selectNearestPreferringCommercial(candidates)
-  if (!pick) {
-    return { kind: 'empty', observed, fetchedAt: entry.fetchedAt }
-  }
-  return { kind: 'ok-stale', plane: pick, observed, fetchedAt: entry.fetchedAt, stale: true, reason }
+  return buildResult(entry, observed, { reason })
 }
 
 // Test hook: clear the in-memory cache between tests.

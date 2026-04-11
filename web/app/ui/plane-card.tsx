@@ -170,14 +170,13 @@ function PanelOk() {
     let aircraftAria = aircraft ? `, ${aircraft.typeName || aircraft.icaoType}` : ''
     let aria = `${displayName} flight ${flight}${routeAria}${aircraftAria}, ${formatFlightLevel(plane.altMeters)}, ${formatSpeed(plane.velocityMps)}, ${formatDistance(plane.distanceKm)} away`
     return (
-      <>
-        <div
-          class="panel"
-          data-fly-state={stale ? 'stale' : 'ok'}
-          role="status"
-          aria-live="polite"
-          aria-label={aria}
-        >
+      <div
+        class="panel"
+        data-fly-state={stale ? 'stale' : 'ok'}
+        role="status"
+        aria-live="polite"
+        aria-label={aria}
+      >
           {/* Line 1 stays in the standard LED amber regardless of
               airline — the brand-color version was noisy. */}
           <div class="panel-line panel-line-1" aria-hidden="true">
@@ -221,9 +220,8 @@ function PanelOk() {
               </span>
             </div>
           ) : null}
-          {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
-        </div>
-      </>
+        {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
+      </div>
     )
   }
 }

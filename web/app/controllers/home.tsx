@@ -115,29 +115,32 @@ function HomePage() {
             </label>
           </div>
             <form method="GET" action="/" class="settings-form">
-              <label>
-                <span>Latitude</span>
+              <div class="settings-field">
+                <label for="settings-lat">Latitude</label>
                 <input
+                  id="settings-lat"
                   type="number"
                   step="0.0001"
                   name="lat"
                   value={location.lat.toFixed(4)}
                   required
                 />
-              </label>
-              <label>
-                <span>Longitude</span>
+              </div>
+              <div class="settings-field">
+                <label for="settings-lon">Longitude</label>
                 <input
+                  id="settings-lon"
                   type="number"
                   step="0.0001"
                   name="lon"
                   value={location.lon.toFixed(4)}
                   required
                 />
-              </label>
-              <label>
-                <span>Radius (km)</span>
+              </div>
+              <div class="settings-field">
+                <label for="settings-radius">Radius (km)</label>
                 <input
+                  id="settings-radius"
                   type="number"
                   step="1"
                   min={MIN_RADIUS_KM}
@@ -146,17 +149,17 @@ function HomePage() {
                   value={String(location.radiusKm)}
                   required
                 />
-              </label>
-              <label>
-                <span>Refresh</span>
-                <select name="refresh">
+              </div>
+              <div class="settings-field">
+                <label for="settings-refresh">Refresh</label>
+                <select id="settings-refresh" name="refresh">
                   {REFRESH_OPTIONS.map((sec) => (
                     <option value={String(sec)} selected={sec === location.refreshSec}>
                       {sec === 0 ? 'Off' : `${sec} s`}
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
               <button
                 type="button"
                 id="update-location-btn"

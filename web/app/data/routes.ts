@@ -7,6 +7,7 @@
 // vs 3/4 on hexdb.io). The response is cached by normalised callsign
 // because routes don't change mid-flight.
 
+import { fetchBoundedJson } from '../utils/fetch-json.ts'
 import { haversineKm } from './geo.ts'
 import type { TrackStart } from './tracks.ts'
 
@@ -14,6 +15,9 @@ const ADSBDB_URL = 'https://api.adsbdb.com/v0/callsign/'
 const FETCH_TIMEOUT_MS = 3_000
 const CACHE_TTL_MS = 60 * 60 * 1_000 // 1 hour
 const CACHE_MAX_ENTRIES = 500
+// Route payload is ~700 bytes. 16 KB gives enormous headroom without
+// letting a poisoned response eat memory.
+const MAX_BODY_BYTES = 16 * 1024
 
 // Cross-check threshold between adsbdb's claimed route endpoints
 // and the first waypoint of OpenSky's /tracks/all trajectory. Big
@@ -137,24 +141,25 @@ export async function getRoute(callsign: string): Promise<RouteInfo | null> {
   let controller = new AbortController()
   let timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    let res = await fetch(ADSBDB_URL + encodeURIComponent(key), {
+    let result = await fetchBoundedJson(ADSBDB_URL + encodeURIComponent(key), {
       signal: controller.signal,
-      headers: { 'User-Agent': 'flyby-web/0.1 (https://github.com/johannesbraeunig/flyby)' },
+      maxBytes: MAX_BODY_BYTES,
     })
-    if (!res.ok) {
+    if (!result.ok) {
+      // HTTP error / too-large / parse error — treat as miss and
+      // negatively cache so GA blips don't hammer the API.
       cache.delete(key)
       cache.set(key, { value: null, expires: Date.now() + CACHE_TTL_MS })
       evictIfFull()
       return null
     }
-    let json = await res.json()
-    let route = parseAdsbdbRoute(json)
+    let route = parseAdsbdbRoute(result.json)
     cache.delete(key)
     cache.set(key, { value: route, expires: Date.now() + CACHE_TTL_MS })
     evictIfFull()
     return route
   } catch {
-    // Timeout / network / parse — don't cache so we retry next tick.
+    // Timeout / network — don't cache so we retry next tick.
     return null
   } finally {
     clearTimeout(timer)

@@ -34,4 +34,19 @@ describe('bboxFor', () => {
     assert.ok(Number.isFinite(b.lomin))
     assert.ok(Number.isFinite(b.lomax))
   })
+
+  it('clamps latitude to [-90, 90] near the poles', () => {
+    let b = bboxFor(89.5, 0, 500)
+    assert.ok(b.lamax <= 90, `lamax ${b.lamax} must be ≤ 90`)
+    assert.ok(b.lamin >= -90)
+  })
+
+  it('clamps longitude to [-180, 180] near the antimeridian', () => {
+    let b = bboxFor(0, 179, 500)
+    assert.ok(b.lomax <= 180, `lomax ${b.lomax} must be ≤ 180`)
+    assert.ok(b.lomin >= -180)
+    let b2 = bboxFor(0, -179, 500)
+    assert.ok(b2.lomin >= -180, `lomin ${b2.lomin} must be ≥ -180`)
+    assert.ok(b2.lomax <= 180)
+  })
 })

@@ -207,11 +207,15 @@ body {
   position: absolute;
   bottom: 0.6rem;
   right: 1rem;
+  max-width: 60%;
   font-family: var(--font-ui);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   color: var(--ui-muted);
   text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Pixel arrow for the FROM→TO route — a 9×5 dot-matrix SVG that
@@ -459,17 +463,18 @@ body {
   gap: 0.6rem;
 }
 
-.settings-form label {
+.settings-field {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+.settings-field label {
+  display: block;
   font-size: 0.7rem;
   color: var(--ui-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  min-width: 0;
-}
-
-.settings-form label > span {
   margin-bottom: 0.2rem;
 }
 
@@ -586,14 +591,8 @@ body {
     gap: 0.4rem;
   }
 
-  .settings-fab {
-    top: 0.75rem;
-    right: 0.75rem;
-  }
-
   .settings-panel {
     width: calc(100vw - 1.5rem);
-    right: 0;
   }
 
   .settings-form {
