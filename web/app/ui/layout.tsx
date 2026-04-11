@@ -7,29 +7,14 @@ export interface LayoutProps {
   children?: RemixNode
 }
 
-const REPO_URL = 'https://github.com/johannesbraeunig/flyby'
-
+// The layout for Remix v3 is a near-zero shell: the page is the
+// plane panel, full-viewport. Branding and meta links live inside
+// the floating settings overlay rendered by the home controller.
 export function Layout() {
   return ({ title, children }: LayoutProps) => (
     <Document title={title}>
-      <div class="page">
-        <header class="page-header">
-          <h1>FlyBy</h1>
-        </header>
-        <main>{children}</main>
-        <footer class="page-footer">
-          <p>
-            Data from{' '}
-            <a href="https://opensky-network.org" rel="noreferrer">
-              OpenSky Network
-            </a>
-            {' · '}
-            <a href={REPO_URL} rel="noreferrer">
-              Source on GitHub
-            </a>
-          </p>
-        </footer>
-      </div>
+      <div class="page">{children}</div>
     </Document>
   )
 }
+

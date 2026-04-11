@@ -57,6 +57,8 @@ interface HomePageProps {
   route: Awaited<ReturnType<typeof getRoute>>
 }
 
+const REPO_URL = 'https://github.com/johannesbraeunig/flyby'
+
 function HomePage() {
   return ({ location, result, route }: HomePageProps) => {
     let pollUrl =
@@ -65,61 +67,95 @@ function HomePage() {
       `&radius=${location.radiusKm}`
     return (
       <Layout title="FlyBy — nearest plane">
+        <main class="stage">
+          <div
+            id="plane-card"
+            class="plane-card"
+            data-fly-poll={pollUrl}
+            data-fly-interval={String(location.refreshSec)}
+          >
+            <PlaneCard result={result} route={route} />
+          </div>
+        </main>
+
         {location.fallbackReason === 'denied' ? (
-          <div class="banner banner-warn">
-            Location permission denied. Showing flights over <strong>Hamburg</strong> as a fallback.
-            Unblock location for this site in your browser (click the icon in the address bar →
-            Location → Allow), then <a href="/">try again</a>.
+          <div class="banner banner-warn" role="alert">
+            Location permission denied. Showing flights over <strong>Hamburg</strong>. Unblock
+            location for this site in your browser, then <a href="/">try again</a>.
           </div>
         ) : null}
 
-        <div
-          id="plane-card"
-          data-fly-poll={pollUrl}
-          data-fly-interval={String(location.refreshSec)}
-        >
-          <PlaneCard result={result} route={route} />
-        </div>
-
-        <details class="settings">
-          <summary>Settings</summary>
-          <form method="GET" action="/" class="settings-form">
-            <label>
-              Latitude
-              <input type="number" step="0.0001" name="lat" value={location.lat.toFixed(4)} required />
-            </label>
-            <label>
-              Longitude
-              <input type="number" step="0.0001" name="lon" value={location.lon.toFixed(4)} required />
-            </label>
-            <label>
-              Radius (km)
-              <input
-                type="number"
-                step="1"
-                min={MIN_RADIUS_KM}
-                max={MAX_RADIUS_KM}
-                name="radius"
-                value={String(location.radiusKm)}
-                required
-              />
-            </label>
-            <label>
-              Refresh
-              <select name="refresh">
-                {REFRESH_OPTIONS.map((sec) => (
-                  <option value={String(sec)} selected={sec === location.refreshSec}>
-                    {sec === 0 ? 'Off' : `${sec} s`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="submit">Apply</button>
-          </form>
-          <p class="settings-meta">
-            Source: <code>{location.source}</code>
-            {location.source === 'fallback' ? ` (${location.fallbackReason})` : ''}
-          </p>
+        <details class="settings-fab">
+          <summary aria-label="Settings">
+            <span aria-hidden="true">⚙</span>
+          </summary>
+          <div class="settings-panel">
+            <h2 class="settings-heading">Settings</h2>
+            <form method="GET" action="/" class="settings-form">
+              <label>
+                <span>Latitude</span>
+                <input
+                  type="number"
+                  step="0.0001"
+                  name="lat"
+                  value={location.lat.toFixed(4)}
+                  required
+                />
+              </label>
+              <label>
+                <span>Longitude</span>
+                <input
+                  type="number"
+                  step="0.0001"
+                  name="lon"
+                  value={location.lon.toFixed(4)}
+                  required
+                />
+              </label>
+              <label>
+                <span>Radius (km)</span>
+                <input
+                  type="number"
+                  step="1"
+                  min={MIN_RADIUS_KM}
+                  max={MAX_RADIUS_KM}
+                  name="radius"
+                  value={String(location.radiusKm)}
+                  required
+                />
+              </label>
+              <label>
+                <span>Refresh</span>
+                <select name="refresh">
+                  {REFRESH_OPTIONS.map((sec) => (
+                    <option value={String(sec)} selected={sec === location.refreshSec}>
+                      {sec === 0 ? 'Off' : `${sec} s`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" class="settings-apply">
+                Apply
+              </button>
+            </form>
+            <button type="button" id="fullscreen-btn" class="settings-secondary">
+              Fullscreen
+            </button>
+            <p class="settings-meta">
+              Data from{' '}
+              <a href="https://opensky-network.org" rel="noreferrer">
+                OpenSky
+              </a>
+              {' · routes from '}
+              <a href="https://adsbdb.com" rel="noreferrer">
+                adsbdb
+              </a>
+              <br />
+              <a href={REPO_URL} rel="noreferrer">
+                Source on GitHub
+              </a>
+            </p>
+          </div>
         </details>
 
         <script src="/flyby.js" defer></script>
@@ -131,30 +167,24 @@ function HomePage() {
 function LocatingPage() {
   return () => (
     <Layout title="FlyBy — locating you">
-      <div class="locating">
-        <div class="panel" data-fly-state="locating">
-          <div class="panel-line panel-line-1" style="color: #F9BA00">
-            FlyBy
+      <main class="stage">
+        <div class="plane-card">
+          <div class="panel" data-fly-state="locating">
+            <div class="panel-line panel-line-1" style="color: #ffaa00">
+              FLYBY
+            </div>
+            <div class="panel-line panel-line-2">LOCATING YOU</div>
+            <div class="panel-line panel-line-3">ALLOW LOCATION</div>
           </div>
-          <div class="panel-line panel-line-2">Locating you...</div>
-          <div class="panel-line panel-line-3">Allow location access</div>
         </div>
-        <p class="locating-help">
-          FlyBy uses your browser's location to find aircraft overhead. We never store
-          your coordinates anywhere — they only travel between your browser and OpenSky
-          (via this server) for the duration of a request.
-        </p>
-        <p class="locating-help">
-          If you'd rather not share location,{' '}
-          <a
-            href={`/?lat=${HAMBURG.lat}&lon=${HAMBURG.lon}&radius=${DEFAULT_RADIUS_KM}`}
-          >
-            use Hamburg as a default
-          </a>
-          .
-        </p>
-        <script src="/flyby.js" defer></script>
-      </div>
+      </main>
+      <p class="locating-help">
+        FlyBy needs your location to find aircraft overhead.{' '}
+        <a href={`/?lat=${HAMBURG.lat}&lon=${HAMBURG.lon}&radius=${DEFAULT_RADIUS_KM}`}>
+          Use Hamburg instead
+        </a>
+      </p>
+      <script src="/flyby.js" defer></script>
     </Layout>
   )
 }

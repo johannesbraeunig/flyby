@@ -1,7 +1,14 @@
 import type { NearestResult, Plane } from '../data/opensky.ts'
 import type { RouteInfo } from '../data/routes.ts'
 import { lookupAirline } from '../data/airlines.ts'
-import { formatDistance, formatFlightLevel, formatSpeed, splitCallsign } from '../utils/format.ts'
+import {
+  formatDistance,
+  formatDistanceCompact,
+  formatFlightLevel,
+  formatSpeed,
+  formatSpeedCompact,
+  splitCallsign,
+} from '../utils/format.ts'
 
 export interface PlaneCardProps {
   result: NearestResult
@@ -9,7 +16,8 @@ export interface PlaneCardProps {
 }
 
 // Render the LED-style 3-line panel for any NearestResult variant.
-// Sized as a 16:8 (matches the firmware's 64×32) panel scaled up.
+// Shape mirrors the firmware's HUB75 layout: line 1 airline in the
+// airline brand color, lines 2/3 in amber.
 export function PlaneCard() {
   return ({ result, route }: PlaneCardProps) => {
     if (result.kind === 'ok' || result.kind === 'ok-stale') {
@@ -23,31 +31,61 @@ export function PlaneCard() {
       )
     }
     if (result.kind === 'empty') {
-      return <PanelMessage line1="No aircraft" line2="overhead right now" line3={`within ${result.observed.radiusKm} km`} color="#888" />
+      return (
+        <PanelMessage
+          line1="NO PLANES"
+          line2="OVERHEAD"
+          line3={`< ${result.observed.radiusKm} KM`}
+          color="#ffaa00"
+        />
+      )
     }
     if (result.kind === 'rate-limited') {
       let retryIn = result.retryAfterSec ?? 10
-      return <PanelMessage line1="Rate limited" line2="OpenSky says wait" line3={`retry in ${retryIn}s`} color="#FFCC00" />
+      return (
+        <PanelMessage
+          line1="RATE LIMITED"
+          line2="OPENSKY WAIT"
+          line3={`RETRY ${retryIn}S`}
+          color="#ffcc00"
+        />
+      )
     }
-    return <PanelMessage line1="OpenSky error" line2={result.message.slice(0, 24)} line3="will retry on next refresh" color="#E81932" />
+    return (
+      <PanelMessage
+        line1="OPENSKY ERR"
+        line2={result.message.slice(0, 14).toUpperCase()}
+        line3="RETRY SOON"
+        color="#ff5522"
+      />
+    )
   }
 }
 
-// Live-map deep link. OpenSky's own map (map.opensky-network.org)
-// is gated behind a human-verification SPA and doesn't accept URL
-// params for a specific aircraft, so we point at ADS-B Exchange's
-// globe view, which reliably deep-links by icao24 hex.
+// Live-map deep link. OpenSky's own map is gated behind a human-
+// verification SPA with no URL-param deep-linking; ADS-B Exchange's
+// globe view reliably deep-links by icao24 hex.
 function liveMapUrl(icao24: string): string {
   return `https://globe.adsbexchange.com/?icao=${encodeURIComponent(icao24.toLowerCase())}`
 }
 
-// Format the second LED line: "DLH441 FRA→JFK" when we know the route,
-// otherwise just the callsign. We use IATA airport codes because they
-// fit (3 chars each) and the firmware reference (`DLH441 FRA->JFK`)
-// uses them too.
-function formatRouteLine(flight: string, route: RouteInfo | null): string {
+// Format line 2 to match the reference photo: "CALLSIGN  DEST".
+// We display the *destination* airport code only (not origin→dest)
+// because the dot-matrix grid in the photo has room for ~12 chars
+// and "DLH441  JFK" reads at a glance. Origin still shows in the
+// aria-label.
+function formatLine2(flight: string, route: RouteInfo | null): string {
   if (!route) return flight
-  return `${flight} ${route.originIata}→${route.destinationIata}`
+  return `${flight}  ${route.destinationIata}`
+}
+
+// Format line 3: "FL361  465  3.1KM" — altitude, speed (kt), distance,
+// compressed to fit the ~14-char dot-matrix width.
+function formatLine3(plane: Plane): string {
+  let fl = formatFlightLevel(plane.altMeters)
+  let kt = formatSpeedCompact(plane.velocityMps).padStart(3)
+  let km = formatDistanceCompact(plane.distanceKm)
+  return `${fl}  ${kt}  ${km}`
 }
 
 function PanelOk() {
@@ -64,12 +102,12 @@ function PanelOk() {
   }) => {
     let { icao, number } = splitCallsign(plane.callsign)
     let airline = lookupAirline(plane.callsign)
-    let displayName = airline?.name ?? (plane.originCountry || icao || 'Aircraft')
-    let color = airline?.hex ?? '#FFFFFF'
-    let line1 = displayName.slice(0, 16)
+    let displayName = airline?.name ?? (plane.originCountry || icao || 'AIRCRAFT')
+    let color = airline?.hex ?? '#ffaa00'
+    let line1 = displayName.toUpperCase().slice(0, 14)
     let flight = `${icao}${number}`.slice(0, 8)
-    let line2 = formatRouteLine(flight, route)
-    let line3 = `${formatFlightLevel(plane.altMeters)}  ${formatSpeed(plane.velocityMps).padStart(5)}  ${formatDistance(plane.distanceKm)}`
+    let line2 = formatLine2(flight, route).toUpperCase()
+    let line3 = formatLine3(plane)
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
       : ''
@@ -96,7 +134,7 @@ function PanelOk() {
         </div>
         <p class="panel-links">
           <a href={liveMapUrl(plane.icao24)} target="_blank" rel="noreferrer">
-            Track {plane.icao24.toUpperCase()} on live map ↗
+            Track {plane.icao24.toUpperCase()} ↗
           </a>
         </p>
       </>
@@ -105,7 +143,17 @@ function PanelOk() {
 }
 
 function PanelMessage() {
-  return ({ line1, line2, line3, color }: { line1: string; line2: string; line3: string; color: string }) => (
+  return ({
+    line1,
+    line2,
+    line3,
+    color,
+  }: {
+    line1: string
+    line2: string
+    line3: string
+    color: string
+  }) => (
     <div class="panel" data-fly-state="message">
       <div class="panel-line panel-line-1" style={`color: ${color}`}>
         {line1}

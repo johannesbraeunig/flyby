@@ -63,7 +63,7 @@ describe('router', () => {
     let res = await router.fetch('http://localhost/')
     assert.equal(res.status, 200)
     let html = await res.text()
-    assert.match(html, /Locating you/)
+    assert.match(html, /LOCATING YOU/)
     assert.equal(lastUrl, null) // never hit OpenSky
   })
 
@@ -73,7 +73,8 @@ describe('router', () => {
     let html = await res.text()
     assert.match(html, /Lufthansa/)
     assert.match(html, /#F9BA00/i)
-    assert.match(html, /DLH441 IAH→FRA/)
+    // Line 2 format is "CALLSIGN  DEST" (destination only, matches photo ref).
+    assert.match(html, /DLH441 {2}FRA/)
     // Both OpenSky and adsbdb were called during the render.
   })
 
@@ -126,7 +127,7 @@ describe('router', () => {
     let res = await router.fetch('http://localhost/?lat=0&lon=0')
     assert.equal(res.status, 200)
     let html = await res.text()
-    assert.match(html, /No aircraft/)
+    assert.match(html, /NO PLANES/)
   })
 
   it('handles 429 rate limit gracefully', async () => {
@@ -136,7 +137,7 @@ describe('router', () => {
     let res = await router.fetch('http://localhost/?lat=0&lon=0')
     assert.equal(res.status, 200)
     let html = await res.text()
-    assert.match(html, /Rate limited/)
-    assert.match(html, /15s/)
+    assert.match(html, /RATE LIMITED/)
+    assert.match(html, /RETRY 15S/)
   })
 })

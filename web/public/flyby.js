@@ -108,13 +108,32 @@
     start()
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      bootGeolocate()
-      bootPolling()
+  function bootFullscreen() {
+    var btn = document.getElementById('fullscreen-btn')
+    if (!btn) return
+    btn.addEventListener('click', function () {
+      var doc = document
+      var docEl = doc.documentElement
+      var isFs = doc.fullscreenElement
+      if (isFs) {
+        if (doc.exitFullscreen) doc.exitFullscreen()
+      } else if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(function (err) {
+          console.warn('fullscreen request failed', err)
+        })
+      }
     })
-  } else {
+  }
+
+  function boot() {
     bootGeolocate()
     bootPolling()
+    bootFullscreen()
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot)
+  } else {
+    boot()
   }
 })()

@@ -16,10 +16,23 @@ export function formatSpeed(velMps: number | null): string {
   return `${kt}kt`
 }
 
+// Just the knots number (no "kt" suffix) for tight LED layouts.
+export function formatSpeedCompact(velMps: number | null): string {
+  if (velMps === null || !Number.isFinite(velMps)) return '?'
+  return String(Math.round(velMps * MPS_TO_KNOTS))
+}
+
 export function formatDistance(km: number): string {
   if (!Number.isFinite(km)) return '?'
   if (km < 10) return `${km.toFixed(1)} km`
   return `${Math.round(km)} km`
+}
+
+// Compact form: "3.1KM", "42KM" — no space, uppercase, for the LED panel.
+export function formatDistanceCompact(km: number): string {
+  if (!Number.isFinite(km)) return '?'
+  if (km < 10) return `${km.toFixed(1)}KM`
+  return `${Math.round(km)}KM`
 }
 
 // Take a callsign like "DLH441 " and split into prefix + flight number.

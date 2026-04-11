@@ -1,101 +1,117 @@
-/* FlyBy web — LED-board-styled plane display.
-   Visually mirrors the firmware's 64×32 P4 HUB75 panel:
-   3 lines of monospace text on a black background, line 1
-   in the airline brand color, lines 2/3 in white.
-*/
+/* FlyBy web — fullscreen dot-matrix LED panel.
+   Visually mirrors a warm-amber HUB75 display: big Jersey-10 pixel
+   text, a subtle dot-grid "unlit LED" background, and a soft
+   text-shadow bloom. Line 1 takes an airline brand color; lines
+   2/3 are amber. */
 
 :root {
-  --bg: #0a0a0a;
-  --fg: #e0e0e0;
-  --muted: #888;
-  --warn: #ffcc00;
-  --error: #e81932;
-  --panel-bg: #000;
-  --panel-text: #ffffff;
+  --bg-deep: #0a0604;
+  --led-off: rgba(255, 160, 0, 0.055);
+  --led-amber: #ffaa00;
+  --led-amber-soft: #ffc044;
+  --led-glow: rgba(255, 170, 0, 0.55);
+  --ui-border: rgba(255, 170, 0, 0.28);
+  --ui-muted: rgba(255, 190, 80, 0.55);
+  --ui-panel-bg: rgba(12, 8, 6, 0.92);
+  --font-display: 'Jersey 10', 'Courier New', monospace;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html,
 body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--led-amber);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+body {
+  /* The unlit LED pixel grid: a dim radial dot, tiled across the
+     whole viewport. The "on" pixels (text) sit on top and outshine
+     the grid with the text-shadow bloom. */
+  background-image: radial-gradient(
+    circle at center,
+    var(--led-off) 36%,
+    transparent 37%
+  );
+  background-size: 8px 8px;
 }
 
 .page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 2rem 1rem 4rem;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.page-header h1 {
-  font-size: 1.75rem;
-  margin: 0 0 0.25rem;
-  letter-spacing: 0.05em;
-}
-
-.tagline {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.page-footer {
-  margin-top: 3rem;
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.page-footer a {
-  color: var(--muted);
-}
-
-/* The LED panel itself. Aspect ratio matches 64×32 (2:1).
-   Width fills the container, height follows. The font scales
-   so that 16 monospace characters fit across one line. */
-.panel {
-  background: var(--panel-bg);
-  border-radius: 8px;
-  padding: 1.25rem 1.5rem;
-  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--panel-text);
-  box-shadow: 0 0 0 2px #1a1a1a, 0 0 24px rgba(0, 0, 0, 0.6);
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
   position: relative;
-  overflow: hidden;
+}
+
+.stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  min-height: 0;
+}
+
+/* The plane-card wrapper is what the 30-s poll replaces via
+   innerHTML. It can contain a <panel> plus an optional map link. */
+.plane-card {
+  width: min(100%, 1600px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* ───── LED panel ───── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 2.5rem 3rem;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
 }
 
 .panel-line {
-  white-space: pre;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: clamp(1rem, 4.5vw, 1.6rem);
-  line-height: 1.2;
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 0.9;
+  color: var(--led-amber);
+  text-shadow:
+    0 0 18px var(--led-glow),
+    0 0 6px var(--led-glow),
+    0 0 2px var(--led-glow);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  user-select: none;
 }
 
 .panel-line-1 {
-  font-size: clamp(1.1rem, 5vw, 1.85rem);
+  font-size: clamp(4.5rem, 18vw, 15rem);
 }
 
-.panel-line-2,
+.panel-line-2 {
+  font-size: clamp(3.5rem, 13vw, 11rem);
+  color: var(--led-amber-soft);
+}
+
 .panel-line-3 {
-  color: var(--panel-text);
+  font-size: clamp(3rem, 10vw, 9rem);
+  color: var(--led-amber-soft);
+  opacity: 0.92;
 }
 
 .panel[data-fly-state='locating'] .panel-line-1 {
@@ -104,131 +120,238 @@ body {
 
 .panel-stale-banner {
   position: absolute;
-  bottom: 0.4rem;
-  right: 0.6rem;
+  bottom: 0.6rem;
+  right: 1rem;
+  font-family: var(--font-ui);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
-  color: var(--warn);
-  font-family: -apple-system, sans-serif;
-  font-weight: 500;
+  color: var(--ui-muted);
+  text-shadow: none;
 }
 
+/* Subtle map-link below the panel */
 .panel-links {
-  margin: 0.75rem 0 0;
+  font-family: var(--font-ui);
   font-size: 0.85rem;
-  text-align: right;
+  color: var(--ui-muted);
+  letter-spacing: 0.04em;
 }
 
 .panel-links a {
-  color: var(--muted);
+  color: inherit;
   text-decoration: none;
+  border-bottom: 1px dotted var(--ui-border);
+  padding-bottom: 2px;
 }
 
 .panel-links a:hover {
-  color: var(--fg);
+  color: var(--led-amber);
+  border-bottom-color: var(--led-amber);
 }
 
+/* ───── Denied banner ───── */
+
 .banner {
-  padding: 0.75rem 1rem;
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem 1.25rem;
   border-radius: 6px;
-  margin-bottom: 1.25rem;
-  font-size: 0.9rem;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  z-index: 10;
+  backdrop-filter: blur(6px);
 }
 
 .banner-warn {
-  background: rgba(255, 204, 0, 0.1);
-  border: 1px solid rgba(255, 204, 0, 0.4);
-  color: var(--warn);
+  background: rgba(50, 24, 0, 0.9);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-muted);
 }
 
 .banner a {
-  color: inherit;
+  color: var(--led-amber);
   text-decoration: underline;
 }
 
-.locating {
+/* ───── Locating help ───── */
+
+.locating-help {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--ui-muted);
   text-align: center;
 }
 
-.locating-help {
-  color: var(--muted);
-  font-size: 0.85rem;
-  max-width: 36rem;
-  margin: 1rem auto 0;
-}
-
 .locating-help a {
-  color: var(--fg);
+  color: var(--led-amber);
 }
 
-.settings {
-  margin-top: 2rem;
-  padding: 1rem 1.25rem;
-  background: #141414;
+/* ───── Settings FAB (floating gear) ───── */
+
+.settings-fab {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 20;
+}
+
+.settings-fab summary {
+  list-style: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  place-items: center;
+  background: var(--ui-panel-bg);
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
-  border: 1px solid #222;
-}
-
-.settings summary {
+  color: var(--ui-muted);
+  font-size: 1.3rem;
   cursor: pointer;
-  font-size: 0.9rem;
-  color: var(--muted);
-  user-select: none;
+  backdrop-filter: blur(6px);
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
 }
 
-.settings summary:hover {
-  color: var(--fg);
+.settings-fab summary::-webkit-details-marker {
+  display: none;
+}
+.settings-fab summary::marker {
+  display: none;
+}
+
+.settings-fab summary:hover {
+  color: var(--led-amber);
+  border-color: var(--led-amber);
+}
+
+.settings-panel {
+  position: absolute;
+  top: 3.25rem;
+  right: 0;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.25rem 1rem;
+  background: var(--ui-panel-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  font-family: var(--font-ui);
+}
+
+.settings-heading {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ui-muted);
+  margin-bottom: 0.75rem;
+  font-weight: 500;
 }
 
 .settings-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
-  margin-top: 1rem;
-  align-items: end;
+  gap: 0.6rem;
 }
 
 .settings-form label {
   display: flex;
   flex-direction: column;
-  font-size: 0.75rem;
-  color: var(--muted);
+  font-size: 0.7rem;
+  color: var(--ui-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+}
+
+.settings-form label > span {
+  margin-bottom: 0.2rem;
 }
 
 .settings-form input,
 .settings-form select {
-  margin-top: 0.25rem;
-  padding: 0.5rem;
+  padding: 0.45rem 0.55rem;
   background: #000;
-  border: 1px solid #333;
-  color: var(--fg);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  color: var(--led-amber-soft);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   border-radius: 4px;
+  outline: none;
 }
 
-.settings-form button {
+.settings-form input:focus,
+.settings-form select:focus {
+  border-color: var(--led-amber);
+  box-shadow: 0 0 0 2px rgba(255, 170, 0, 0.15);
+}
+
+.settings-apply {
   grid-column: 1 / -1;
-  padding: 0.6rem;
-  background: var(--fg);
-  color: #000;
+  padding: 0.55rem;
+  background: var(--led-amber);
+  color: #120803;
   border: none;
   border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.85rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  margin-top: 0.25rem;
+}
+
+.settings-apply:hover {
+  background: #ffc044;
+}
+
+.settings-secondary {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  color: var(--ui-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 4px;
   cursor: pointer;
 }
 
-.settings-form button:hover {
-  background: #fff;
+.settings-secondary:hover {
+  color: var(--led-amber);
+  border-color: var(--led-amber);
 }
 
 .settings-meta {
-  margin: 0.75rem 0 0;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 170, 0, 0.12);
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--ui-muted);
+  line-height: 1.6;
 }
+
+.settings-meta a {
+  color: var(--ui-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ui-border);
+}
+
+.settings-meta a:hover {
+  color: var(--led-amber);
+}
+
+/* ───── Animations ───── */
 
 @keyframes blink {
   0%,
@@ -236,7 +359,7 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0.3;
+    opacity: 0.4;
   }
 }
 
@@ -246,8 +369,25 @@ body {
   }
 }
 
-@media (max-width: 480px) {
+/* ───── Narrow viewports ───── */
+
+@media (max-width: 560px) {
+  .panel {
+    padding: 1.5rem 1rem;
+    gap: 0.4rem;
+  }
+
+  .settings-fab {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+
+  .settings-panel {
+    width: calc(100vw - 1.5rem);
+    right: 0;
+  }
+
   .settings-form {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 }
