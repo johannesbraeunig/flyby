@@ -13,8 +13,8 @@ import { render } from '../utils/render.tsx'
 // without a full reload. The cookie/URL fallback chain is the same as
 // the home page.
 export let nearestApi: BuildAction<'GET', typeof routes.nearestApi> = {
-  async handler({ request, url }) {
-    let location = resolveLocation(url, request.headers.get('cookie'))
+  async handler({ url }) {
+    let location = resolveLocation(url)
     if (location.source === 'fallback' && location.fallbackReason === 'no-params') {
       return new Response('missing lat/lon', { status: 400 })
     }

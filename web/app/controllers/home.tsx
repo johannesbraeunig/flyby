@@ -9,7 +9,6 @@ import {
   MAX_RADIUS_KM,
   MIN_RADIUS_KM,
   REFRESH_OPTIONS,
-  locationCookieValue,
   resolveLocation,
   type ResolvedLocation,
 } from '../data/location.ts'
@@ -19,12 +18,12 @@ import { PlaneCard } from '../ui/plane-card.tsx'
 import { render } from '../utils/render.tsx'
 
 export let home: BuildAction<'GET', typeof routes.home> = {
-  async handler({ request, url }) {
-    let location = resolveLocation(url, request.headers.get('cookie'))
+  async handler({ url }) {
+    let location = resolveLocation(url)
 
-    // First-visit landing page when geolocation hasn't been resolved yet:
-    // we render the locating screen (no OpenSky call) and ship a tiny
-    // bootstrap script that calls navigator.geolocation and redirects.
+    // First-visit landing page when there are no lat/lon URL params:
+    // render the locating screen (no OpenSky call) so the user can
+    // explicitly pick "Use my location" or "Use Hamburg".
     if (location.source === 'fallback' && location.fallbackReason === 'no-params') {
       return render(<LocatingPage />, {
         headers: { 'Cache-Control': 'no-store' },
@@ -47,15 +46,9 @@ export let home: BuildAction<'GET', typeof routes.home> = {
       aircraft = a
     }
 
-    let headers = new Headers({ 'Cache-Control': 'no-store' })
-    // Persist a cookie when the location came from an explicit URL grant.
-    if (location.source === 'url') {
-      headers.append('Set-Cookie', locationCookieValue(location))
-    }
-
     return render(
       <HomePage location={location} result={result} route={route} aircraft={aircraft} />,
-      { headers },
+      { headers: { 'Cache-Control': 'no-store' } },
     )
   },
 }

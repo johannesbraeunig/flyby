@@ -141,7 +141,9 @@ describe('router', () => {
     assert.equal(res.status, 400)
   })
 
-  it('GET / with cookie restores location', async () => {
+  it('GET / ignores any cookie (URL is the only source of truth)', async () => {
+    // Even with a flyby_loc cookie, a bare URL should render the
+    // locating page, not restore from the cookie.
     let res = await router.fetch(
       new Request('http://localhost/', {
         headers: { cookie: 'flyby_loc=53.5511,9.9937,40' },
@@ -149,14 +151,13 @@ describe('router', () => {
     )
     assert.equal(res.status, 200)
     let html = await res.text()
-    assert.match(html, /Lufthansa/)
+    assert.match(html, /PICK A/)
+    assert.doesNotMatch(html, /Lufthansa/)
   })
 
-  it('GET / with URL params sets the location cookie', async () => {
+  it('GET / with URL params does NOT emit a Set-Cookie header', async () => {
     let res = await router.fetch('http://localhost/?lat=52.52&lon=13.405')
-    let setCookie = res.headers.get('set-cookie')
-    assert.ok(setCookie)
-    assert.match(setCookie!, /flyby_loc=/)
+    assert.equal(res.headers.get('set-cookie'), null)
   })
 
   it('handles empty OpenSky results gracefully', async () => {
