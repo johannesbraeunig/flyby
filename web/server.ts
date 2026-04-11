@@ -3,14 +3,18 @@ import * as http from 'node:http'
 import { createRequestListener } from 'remix/node-fetch-server'
 
 import { router } from './app/router.ts'
+import { applySecurityHeaders } from './app/utils/security-headers.ts'
 
 let server = http.createServer(
   createRequestListener(async (request) => {
     try {
-      return await router.fetch(request)
+      let response = await router.fetch(request)
+      return applySecurityHeaders(response)
     } catch (error) {
       console.error(error)
-      return new Response('Internal Server Error', { status: 500 })
+      return applySecurityHeaders(
+        new Response('Internal Server Error', { status: 500 }),
+      )
     }
   }),
 )

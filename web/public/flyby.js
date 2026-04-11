@@ -10,7 +10,24 @@
   'use strict'
 
   var DEFAULT_POLL_INTERVAL_MS = 30000
-  var DENIED_FALLBACK = '/?denied=1'
+
+  // Build a same-origin path + query string for navigation. Using
+  // `new URL(…, location.origin)` guarantees the result is anchored
+  // to our origin no matter what the caller passes as values —
+  // eliminates any open-redirect footgun where a future caller
+  // might accidentally concat a `//evil.com/…` value into the URL.
+  function homeUrl(params) {
+    var url = new URL('/', window.location.origin)
+    if (params) {
+      Object.keys(params).forEach(function (k) {
+        var v = params[k]
+        if (v !== undefined && v !== null && v !== '') {
+          url.searchParams.set(k, String(v))
+        }
+      })
+    }
+    return url.pathname + url.search
+  }
 
   function bootGeolocate() {
     // Wire the "Use my location" button on the locating page. No
@@ -23,7 +40,7 @@
 
     btn.addEventListener('click', function () {
       if (!('geolocation' in navigator)) {
-        window.location.replace(DENIED_FALLBACK)
+        window.location.replace(homeUrl({ denied: '1' }))
         return
       }
       btn.setAttribute('disabled', 'disabled')
@@ -32,13 +49,13 @@
         function (pos) {
           var lat = pos.coords.latitude.toFixed(4)
           var lon = pos.coords.longitude.toFixed(4)
-          window.location.replace('/?lat=' + lat + '&lon=' + lon)
+          window.location.replace(homeUrl({ lat: lat, lon: lon }))
         },
         function () {
           // Permission denied or unavailable — fall through to the
           // Hamburg default with a flag so the home page can show
           // the "please unblock" banner.
-          window.location.replace(DENIED_FALLBACK)
+          window.location.replace(homeUrl({ denied: '1' }))
         },
         { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 },
       )
@@ -159,20 +176,19 @@
       var originalText = btn.textContent
       btn.textContent = 'Locating…'
       var form = btn.closest('form')
-      var radius =
-        (form && form.querySelector('[name="radius"]')
-          ? form.querySelector('[name="radius"]').value
-          : '50') || '50'
-      var refresh =
-        (form && form.querySelector('[name="refresh"]')
-          ? form.querySelector('[name="refresh"]').value
-          : '30') || '30'
+      var radiusInput = form && form.querySelector('[name="radius"]')
+      var refreshInput = form && form.querySelector('[name="refresh"]')
+      var radius = (radiusInput && radiusInput.value) || '50'
+      var refresh = (refreshInput && refreshInput.value) || '30'
       navigator.geolocation.getCurrentPosition(
         function (pos) {
           var lat = pos.coords.latitude.toFixed(4)
           var lon = pos.coords.longitude.toFixed(4)
+          // homeUrl() encodes each value through URLSearchParams, so
+          // a malformed radius like "50&foo=bar" can't inject
+          // additional query params.
           window.location.replace(
-            '/?lat=' + lat + '&lon=' + lon + '&radius=' + radius + '&refresh=' + refresh,
+            homeUrl({ lat: lat, lon: lon, radius: radius, refresh: refresh }),
           )
         },
         function () {

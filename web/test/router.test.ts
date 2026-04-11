@@ -6,6 +6,7 @@ import { __resetAircraftCacheForTests } from '../app/data/aircraft.ts'
 import { __resetCacheForTests } from '../app/data/opensky.ts'
 import { __resetRouteCacheForTests } from '../app/data/routes.ts'
 import { __resetTrackCacheForTests } from '../app/data/tracks.ts'
+import { __resetRateLimitForTests } from '../app/utils/rate-limit.ts'
 
 // Stub the global fetch so we don't actually hit OpenSky or adsbdb
 // during tests. Routes requests by URL host.
@@ -76,6 +77,7 @@ beforeEach(() => {
   __resetRouteCacheForTests()
   __resetAircraftCacheForTests()
   __resetTrackCacheForTests()
+  __resetRateLimitForTests()
   globalThis.fetch = (async (input: Request | URL | string) => {
     let urlStr = typeof input === 'string' ? input : input.toString()
     lastUrl = urlStr
@@ -113,6 +115,7 @@ afterEach(() => {
   __resetRouteCacheForTests()
   __resetAircraftCacheForTests()
   __resetTrackCacheForTests()
+  __resetRateLimitForTests()
 })
 
 describe('router', () => {
@@ -227,6 +230,40 @@ describe('router', () => {
   it('GET / with URL params does NOT emit a Set-Cookie header', async () => {
     let res = await router.fetch('http://localhost/?lat=52.52&lon=13.405')
     assert.equal(res.headers.get('set-cookie'), null)
+  })
+
+  it('rate-limits /api/nearest after the burst', async () => {
+    // Default bucket = 6 req burst. 7th request from the same
+    // client key should come back as 429.
+    let req = (n: number) =>
+      router.fetch(
+        new Request(`http://localhost/api/nearest?lat=53.5511&lon=9.9937&n=${n}`, {
+          headers: { 'fly-client-ip': '10.0.0.1' },
+        }),
+      )
+    for (let i = 0; i < 6; i++) {
+      let r = await req(i)
+      assert.equal(r.status, 200, `burst slot ${i + 1} should pass`)
+    }
+    let blocked = await req(99)
+    assert.equal(blocked.status, 429, 'burst exhausted → 429')
+    assert.equal(blocked.headers.get('retry-after'), '10')
+  })
+
+  it('rate-limits separately per client IP', async () => {
+    let hitOnce = (ip: string) =>
+      router.fetch(
+        new Request('http://localhost/api/nearest?lat=53.5511&lon=9.9937', {
+          headers: { 'fly-client-ip': ip },
+        }),
+      )
+    // Exhaust ip-1's bucket
+    for (let i = 0; i < 6; i++) await hitOnce('10.0.0.2')
+    let blocked = await hitOnce('10.0.0.2')
+    assert.equal(blocked.status, 429)
+    // ip-3 should still have its full burst
+    let ok = await hitOnce('10.0.0.3')
+    assert.equal(ok.status, 200)
   })
 
   it('handles empty OpenSky results gracefully', async () => {
