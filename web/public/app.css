@@ -102,6 +102,22 @@ body {
   overflow: hidden;
 }
 
+/* Intensity breathing: the whole panel (text + scanlines +
+   stale banner) subtly brightens and dims on a 6.5 s sine wave.
+   Variation is small enough (±3%) that you can't "see" it
+   pulsing, but your eye picks up the low-frequency rhythm.
+   Feels like a slightly loose power supply. */
+@media (prefers-reduced-motion: no-preference) {
+  .panel {
+    animation: panel-breathe 6.5s ease-in-out infinite;
+  }
+}
+
+@keyframes panel-breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(0.94); }
+}
+
 /* CRT scanline overlay — sells the "this is a physical display"
    illusion that the dot-grid background started. A repeating
    2px-transparent / 1px-dark stripe pattern layered above the
@@ -138,31 +154,53 @@ body {
   }
 }
 
-/* ───── Dead-pixel flicker ─────
-   Ambient "aging LED" character: a handful of small amber dots
-   at fixed percent-positions across the viewport, each flashing
-   briefly at staggered intervals. The animation-delay on each
-   dot is negative so the starting phase is different for every
-   one — they never all flash together, and every few seconds
-   one catches your eye somewhere new. */
+/* ───── Ambient LED-aging effects: dead / hot / stuck pixels ─────
+   All three effects are grid-aligned: each "pixel" element is
+   exactly one 10×10 background-grid cell in size, contains a
+   radial-gradient that matches the body's dim-dot pattern, and
+   is positioned at top/left coordinates that are multiples of
+   10 so the bright gradient lands on top of one of the real
+   grid dots. Result: the lit pixels read as "LEDs in the matrix"
+   rather than floating decorative shapes.
 
-.dead-pixels {
+   Positions are fixed pixel coords anchored top-left rather
+   than percentages because radial-gradient alignment only works
+   at exact grid multiples. On narrow viewports (< 680 px wide)
+   a few of the dots fall off the right edge; that's fine —
+   ambient decoration, not critical UI. */
+
+.dead-pixels,
+.hot-pixels {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 5;
 }
 
+/* Shared base: a 10×10 "LED cell" with a radial-gradient dot
+   centered exactly where the body grid's dot would sit. */
+.dead-pixel,
+.hot-pixel,
+.stuck-pixel {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  z-index: 5;
+  background-image: radial-gradient(
+    circle at center,
+    var(--led-amber) 38%,
+    transparent 40%
+  );
+}
+
+/* ── Dead-pixel flicker ──
+   Eight dim LEDs that flash briefly at staggered times. The
+   element is invisible at rest (opacity 0) and snaps to full
+   brightness at specific keyframe points. 11 s cycle. */
 .dead-pixel {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  background: var(--led-amber);
-  border-radius: 0.5px;
   opacity: 0;
-  box-shadow:
-    0 0 4px var(--led-glow),
-    0 0 1px var(--led-glow);
+  filter: drop-shadow(0 0 4px var(--led-glow));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -172,15 +210,10 @@ body {
 }
 
 @keyframes dead-pixel-flicker {
-  /* Resting state: off for most of the cycle. */
   0%, 100% { opacity: 0; }
-
-  /* First flash — quick on/off. */
   28% { opacity: 0; }
   28.5% { opacity: 1; }
   29% { opacity: 0; }
-
-  /* Second flicker — slightly dimmer double-flash. */
   62% { opacity: 0; }
   62.5% { opacity: 0.9; }
   63% { opacity: 0; }
@@ -188,18 +221,58 @@ body {
   64% { opacity: 0; }
 }
 
-/* Staggered positions + start phases. Percent positions keep
-   the dots spread across whatever viewport size we're in;
-   negative delays jumpstart each one mid-cycle so they never
-   synchronize. */
-.dead-pixel-1 { top: 12%; left: 27%; animation-delay: 0s; }
-.dead-pixel-2 { top: 74%; left: 81%; animation-delay: -1.8s; }
-.dead-pixel-3 { top: 38%; left: 54%; animation-delay: -3.4s; }
-.dead-pixel-4 { top: 89%; left: 17%; animation-delay: -5.1s; }
-.dead-pixel-5 { top: 23%; left: 92%; animation-delay: -6.9s; }
-.dead-pixel-6 { top: 63%; left: 8%;  animation-delay: -8.2s; }
-.dead-pixel-7 { top: 47%; left: 71%; animation-delay: -9.5s; }
-.dead-pixel-8 { top: 18%; left: 63%; animation-delay: -10.3s; }
+/* Grid-aligned positions. Every left/top is a multiple of 10. */
+.dead-pixel-1 { top: 60px;  left: 60px;  animation-delay: 0s; }
+.dead-pixel-2 { top: 180px; left: 250px; animation-delay: -1.8s; }
+.dead-pixel-3 { top: 90px;  left: 420px; animation-delay: -3.4s; }
+.dead-pixel-4 { top: 320px; left: 540px; animation-delay: -5.1s; }
+.dead-pixel-5 { top: 280px; left: 110px; animation-delay: -6.9s; }
+.dead-pixel-6 { top: 170px; left: 670px; animation-delay: -8.2s; }
+.dead-pixel-7 { top: 420px; left: 340px; animation-delay: -9.5s; }
+.dead-pixel-8 { top: 50px;  left: 580px; animation-delay: -10.3s; }
+
+/* ── Hot pixels — the bright counterpart ──
+   Four LEDs that flash EXTRA bright on a longer 15 s cycle so
+   they don't sync with the dead pixels. Same size and grid
+   alignment, brighter fill color, bigger glow. */
+.hot-pixel {
+  opacity: 0;
+  filter: drop-shadow(0 0 10px var(--led-glow))
+    drop-shadow(0 0 3px #ffe4aa);
+  background-image: radial-gradient(
+    circle at center,
+    #ffe090 38%,
+    transparent 40%
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hot-pixel {
+    animation: hot-pixel-flicker 15s infinite;
+  }
+}
+
+@keyframes hot-pixel-flicker {
+  0%, 100% { opacity: 0; }
+  44% { opacity: 0; }
+  44.5% { opacity: 1; }
+  45% { opacity: 0.8; }
+  45.5% { opacity: 0; }
+}
+
+.hot-pixel-1 { top: 100px; left: 200px; animation-delay: 0s; }
+.hot-pixel-2 { top: 240px; left: 480px; animation-delay: -4.2s; }
+.hot-pixel-3 { top: 380px; left: 90px;  animation-delay: -8.1s; }
+.hot-pixel-4 { top: 410px; left: 620px; animation-delay: -12s; }
+
+/* ── Stuck pixel ──
+   One LED that's always on — no animation. Matches grid shape
+   and sits on cell (12, 6) at viewport (125, 65). */
+.stuck-pixel {
+  top: 60px;
+  left: 120px;
+  filter: drop-shadow(0 0 3px var(--led-glow));
+}
 
 .panel-line {
   font-family: var(--font-display);

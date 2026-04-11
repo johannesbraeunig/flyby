@@ -25,11 +25,13 @@ export function Document() {
       </head>
       <body>
         {children}
-        {/* Ambient "aging LED" flicker: 8 small dots at fixed
-            percent-positions around the viewport, each
-            independently flashing amber at staggered times via
-            CSS keyframes. Pure cosmetic — pointer-events: none
-            and aria-hidden so they don't get in the way. */}
+        {/* Ambient "aging LED" layer — four effects working
+            together to sell a well-used physical panel:
+              - dead pixels: LEDs briefly failing
+              - hot pixels:  LEDs briefly overdriven
+              - stuck pixel: one permanently failed LED
+              - (panel breathing is on .panel itself, in CSS)
+            All are pointer-events:none, aria-hidden. */}
         <div class="dead-pixels" aria-hidden="true">
           <span class="dead-pixel dead-pixel-1"></span>
           <span class="dead-pixel dead-pixel-2"></span>
@@ -40,6 +42,13 @@ export function Document() {
           <span class="dead-pixel dead-pixel-7"></span>
           <span class="dead-pixel dead-pixel-8"></span>
         </div>
+        <div class="hot-pixels" aria-hidden="true">
+          <span class="hot-pixel hot-pixel-1"></span>
+          <span class="hot-pixel hot-pixel-2"></span>
+          <span class="hot-pixel hot-pixel-3"></span>
+          <span class="hot-pixel hot-pixel-4"></span>
+        </div>
+        <span class="stuck-pixel" aria-hidden="true"></span>
       </body>
     </html>
   )
