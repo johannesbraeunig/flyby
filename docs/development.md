@@ -64,6 +64,16 @@ These cost us an hour the first time. Document them so they don't bite again:
 
 5. **Run `wokwi-cli` whenever you change `diagram.json`** — it lints in ~2 seconds and catches typos, invalid attributes, and wrong pin names without launching the full VS Code simulator.
 
+6. **`wokwi-hub75-matrix` is a non-functional placeholder part.** Wokwi renders the panel as a black rectangle visually, and the part lints clean, but the simulator does **not** decode HUB75 signals — no firmware will ever light it up in Wokwi. Confirmed by:
+   - The official wokwi-cli registry marks the part `"documented": false`
+   - Zero `diagram.json` files on GitHub use it (`gh search code "wokwi-hub75-matrix"` → 0 hits)
+   - `wokwi-cli --screenshot-part matrix` errors with *"Part does not have a valid framebuffer"*
+   - `panel->fillScreen(red)` at brightness 255 with E→GND wiring matching every known example produces no visible output
+
+   **Implication:** the HUB75 display code (`src/display.cpp`) cannot be visually verified in Wokwi. It must be confirmed on real hardware. Wokwi remains useful for everything else: WiFi, HTTPS, ADS-B parsing, state machine, serial logs.
+
+   The diagram still includes the HUB75 part so the wiring is documented and the GPIO pins are reserved, but treat any visual change to the panel in Wokwi as untestable.
+
 ## Native unit tests
 
 Pure-C++ logic (haversine, bbox, layout, airline lookup) goes in source files that don't `#include <Arduino.h>`, so they compile under the host toolchain. Add tests under `test/test_native/` and run:

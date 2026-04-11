@@ -9,7 +9,7 @@
       "id": "matrix",
       "top": -200,
       "left": -80,
-      "attrs": { "rows": "32", "cols": "64" }
+      "attrs": {}
     }
   ],
   "connections": [
@@ -26,7 +26,7 @@
     [ "esp:D19", "matrix:B",   "yellow", [] ],
     [ "esp:D5",  "matrix:C",   "yellow", [] ],
     [ "esp:D21", "matrix:D",   "yellow", [] ],
-    [ "esp:D18", "matrix:E",   "yellow", [] ],
+    [ "esp:GND.2", "matrix:E", "black",  [] ],
     [ "esp:D4",  "matrix:LAT", "white",  [] ],
     [ "esp:D15", "matrix:OE",  "white",  [] ],
     [ "esp:D22", "matrix:CLK", "white",  [] ],
