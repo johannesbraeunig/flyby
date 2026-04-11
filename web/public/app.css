@@ -123,6 +123,12 @@ body {
 .panel-line-2 {
   font-size: clamp(2.75rem, 10vw, 9rem);
   color: var(--led-amber-soft);
+  /* Pull line 2 slightly up into the panel's gap so the airline
+     name on line 1 sits visually closer to the FLIGHT/ROUTE row
+     than to the ALT/SPD/DIST stats row below. Only affects the
+     line 1 → line 2 transition; later gaps stay as the panel gap
+     defines. */
+  margin-top: -0.6rem;
 }
 
 .panel-line-3,
