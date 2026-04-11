@@ -1,7 +1,14 @@
 import * as assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { formatDistance, formatFlightLevel, formatSpeed, splitCallsign } from '../app/utils/format.ts'
+import {
+  formatAltMeters,
+  formatDistance,
+  formatFlightLevel,
+  formatSpeed,
+  formatSpeedKmh,
+  splitCallsign,
+} from '../app/utils/format.ts'
 
 describe('formatFlightLevel', () => {
   it('converts meters to FL hundreds-of-feet', () => {
@@ -28,6 +35,27 @@ describe('formatDistance', () => {
   })
   it('shows whole km over 10', () => {
     assert.equal(formatDistance(42.7), '43 km')
+  })
+})
+
+describe('formatAltMeters', () => {
+  it('rounds meters and suffixes with M', () => {
+    assert.equal(formatAltMeters(8230), '8230M')
+    assert.equal(formatAltMeters(0), '0M')
+  })
+  it('handles missing altitude', () => {
+    assert.equal(formatAltMeters(null), '?')
+  })
+})
+
+describe('formatSpeedKmh', () => {
+  it('converts m/s to km/h', () => {
+    // 250 m/s ≈ 900 km/h — classic long-haul cruise.
+    assert.equal(formatSpeedKmh(250), '900KM/H')
+    assert.equal(formatSpeedKmh(0), '0KM/H')
+  })
+  it('handles missing speed', () => {
+    assert.equal(formatSpeedKmh(null), '?')
   })
 })
 

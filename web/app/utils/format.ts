@@ -22,6 +22,20 @@ export function formatSpeedCompact(velMps: number | null): string {
   return String(Math.round(velMps * MPS_TO_KNOTS))
 }
 
+// Metric altitude: "8230M" or "?" when altitude is missing. Used as
+// secondary context on the ALT label alongside the primary FL value.
+export function formatAltMeters(altMeters: number | null): string {
+  if (altMeters === null || !Number.isFinite(altMeters)) return '?'
+  return `${Math.round(altMeters)}M`
+}
+
+// Metric ground speed: "900KM/H" or "?". Used as secondary context on
+// the SPD label alongside the primary knots value.
+export function formatSpeedKmh(velMps: number | null): string {
+  if (velMps === null || !Number.isFinite(velMps)) return '?'
+  return `${Math.round(velMps * 3.6)}KM/H`
+}
+
 export function formatDistance(km: number): string {
   if (!Number.isFinite(km)) return '?'
   if (km < 10) return `${km.toFixed(1)} km`

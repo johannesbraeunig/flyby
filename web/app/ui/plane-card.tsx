@@ -5,11 +5,13 @@ import type { NearestResult, Plane } from '../data/opensky.ts'
 import type { RouteInfo } from '../data/routes.ts'
 import { lookupAirline } from '../data/airlines.ts'
 import {
+  formatAltMeters,
   formatDistance,
   formatDistanceCompact,
   formatFlightLevel,
   formatSpeed,
   formatSpeedCompact,
+  formatSpeedKmh,
   splitCallsign,
 } from '../utils/format.ts'
 
@@ -175,6 +177,10 @@ function PanelOk() {
     let altStr = formatFlightLevel(plane.altMeters)
     let kt = `${formatSpeedCompact(plane.velocityMps)}KT`
     let km = formatDistanceCompact(plane.distanceKm)
+    // Metric secondary-context values on the ALT / SPD labels,
+    // e.g. "ALT (8230M)" alongside the primary "FL270".
+    let altMetric = formatAltMeters(plane.altMeters)
+    let spdMetric = formatSpeedKmh(plane.velocityMps)
     let routeAria = route
       ? `, ${route.originName || route.originIata} to ${route.destinationName || route.destinationIata}`
       : ''
@@ -211,11 +217,11 @@ function PanelOk() {
           </div>
           <div class="panel-line panel-line-3 panel-stats" aria-hidden="true">
             <span class="stat">
-              <span class="stat-label">ALT</span>
+              <span class="stat-label">ALT ({altMetric})</span>
               <span class="stat-value">{altStr}</span>
             </span>
             <span class="stat">
-              <span class="stat-label">SPD</span>
+              <span class="stat-label">SPD ({spdMetric})</span>
               <span class="stat-value">{kt}</span>
             </span>
             <span class="stat">

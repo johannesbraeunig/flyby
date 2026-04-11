@@ -169,10 +169,16 @@ describe('router', () => {
     // TYPE line (aircraft type from the adsbdb /aircraft/ endpoint).
     assert.match(html, /stat-label[^>]*>TYPE</)
     assert.match(html, /A333/)
-    // Stats line: labelled ALT / SPD / DIST.
-    assert.match(html, /stat-label[^>]*>ALT</)
-    assert.match(html, /stat-label[^>]*>SPD</)
-    assert.match(html, /stat-label[^>]*>DIST</)
+    // Stats line: labelled ALT / SPD / DIST. Each label may carry a
+    // parenthetical metric annotation like "ALT (11000M)", so match
+    // the keyword followed by a word boundary rather than an
+    // immediate end-tag.
+    assert.match(html, /stat-label[^>]*>ALT\b/)
+    assert.match(html, /stat-label[^>]*>SPD\b/)
+    assert.match(html, /stat-label[^>]*>DIST\b/)
+    // And the parenthetical content shows up for ALT / SPD.
+    assert.match(html, /ALT \(11000M\)/)
+    assert.match(html, /SPD \(864KM\/H\)/)
     // Inline Settings link next to the Track link.
     assert.match(html, /class="panel-link settings-inline-link"/)
   })
