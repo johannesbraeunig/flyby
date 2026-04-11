@@ -6,7 +6,7 @@
 
 :root {
   --bg-deep: #0a0604;
-  --led-off: rgba(255, 160, 0, 0.055);
+  --led-off: rgba(255, 170, 0, 0.14);
   --led-amber: #ffaa00;
   --led-amber-soft: #ffc044;
   --led-glow: rgba(255, 170, 0, 0.55);
@@ -37,13 +37,15 @@ body {
 body {
   /* The unlit LED pixel grid: a dim radial dot, tiled across the
      whole viewport. The "on" pixels (text) sit on top and outshine
-     the grid with the text-shadow bloom. */
+     the grid with the text-shadow bloom. The 10px grid with a
+     clearly-visible dot sells the dot-matrix aesthetic without
+     competing with the lit characters. */
   background-image: radial-gradient(
     circle at center,
-    var(--led-off) 36%,
-    transparent 37%
+    var(--led-off) 38%,
+    transparent 40%
   );
-  background-size: 8px 8px;
+  background-size: 10px 10px;
 }
 
 .page {
@@ -58,20 +60,24 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding: clamp(1.5rem, 5vh, 4rem) 1rem 1rem;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem clamp(0.75rem, 3vw, 2rem);
   min-height: 0;
 }
 
 /* The plane-card wrapper is what the 30-s poll replaces via
-   innerHTML. It can contain a <panel> plus an optional map link. */
+   innerHTML. It can contain a <panel> plus an optional map link.
+   gap 0 keeps the Track/Settings row glued to the panel; the row
+   has its own padding. align-items: flex-start keeps the panel
+   and its links left-aligned together. */
 .plane-card {
-  width: min(100%, 1600px);
+  width: fit-content;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
+  align-items: flex-start;
+  gap: 0;
 }
 
 /* ───── LED panel ───── */
@@ -81,9 +87,9 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: clamp(0.9rem, 2.5vw, 2rem);
-  padding: 2.5rem 3rem;
+  padding: 1rem 0 1rem;
   position: relative;
-  width: 100%;
+  width: fit-content;
   max-width: 100%;
 }
 
@@ -99,6 +105,7 @@ body {
   white-space: nowrap;
   letter-spacing: 0.04em;
   user-select: none;
+  text-align: left;
 }
 
 .panel-line-1 {
@@ -117,8 +124,10 @@ body {
   opacity: 0.92;
 }
 
-/* Panel stats rows (lines 2 and 3): labelled stats in a row.
+/* Panel stats rows (lines 2, 3, 4): labelled stats in a row.
    Labels sit ABOVE the values, tiny and dim; values big and bright.
+   - justify-content: flex-start keeps stats hugged to the panel's
+     left edge — user preference over centered.
    - align-items: flex-start keeps the labels visually in line even
      when one value (e.g. the route with its pixel arrow) renders
      at a slightly different height from the others.
@@ -130,6 +139,7 @@ body {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: flex-start;
+  justify-content: flex-start;
   column-gap: clamp(1.5rem, 5vw, 4rem);
   row-gap: clamp(0.8rem, 2vw, 1.5rem);
   opacity: 1;
@@ -151,6 +161,7 @@ body {
   flex-direction: column;
   align-items: flex-start;
   line-height: 0.9;
+  text-align: left;
 }
 
 .stat-label {
@@ -206,16 +217,20 @@ body {
   filter: drop-shadow(0 0 8px var(--led-glow)) drop-shadow(0 0 2px var(--led-glow));
 }
 
-/* Map link + inline Settings link row below the panel */
+/* Map link + inline Settings link row, sitting immediately under
+   the panel inside .plane-card (which has gap: 0). Left-aligned
+   with the panel's content. */
 .panel-links {
   font-family: var(--font-ui);
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--ui-muted);
   letter-spacing: 0.04em;
   display: flex;
   gap: 0;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding: 0.6rem 0 0;
+  margin: 0;
 }
 
 .panel-link {

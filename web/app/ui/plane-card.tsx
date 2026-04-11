@@ -1,3 +1,5 @@
+import type { RemixNode } from 'remix/component'
+
 import type { AircraftInfo } from '../data/aircraft.ts'
 import type { NearestResult, Plane } from '../data/opensky.ts'
 import type { RouteInfo } from '../data/routes.ts'
@@ -17,13 +19,19 @@ export interface PlaneCardProps {
   aircraft: AircraftInfo | null
 }
 
-// Render the LED-style panel for any NearestResult variant. The
-// success panel has 4 lines: airline, flight+route, aircraft type,
-// and the ALT/SPD/DIST stats row.
+// Render the LED-style panel for any NearestResult variant, plus
+// a persistent footer row with the Settings link (and a Track link
+// when we have a plane). Keeping the links at the PlaneCard level
+// means the Settings link never disappears just because there are
+// no planes overhead — users can always get to settings.
 export function PlaneCard() {
   return ({ result, route, aircraft }: PlaneCardProps) => {
+    let panelNode: RemixNode
+    let trackIcao24: string | null = null
+
     if (result.kind === 'ok' || result.kind === 'ok-stale') {
-      return (
+      trackIcao24 = result.plane.icao24
+      panelNode = (
         <PanelOk
           plane={result.plane}
           route={route}
@@ -32,9 +40,8 @@ export function PlaneCard() {
           note={result.kind === 'ok-stale' ? result.reason : null}
         />
       )
-    }
-    if (result.kind === 'empty') {
-      return (
+    } else if (result.kind === 'empty') {
+      panelNode = (
         <PanelMessage
           line1="NO PLANES"
           line2="OVERHEAD"
@@ -42,10 +49,9 @@ export function PlaneCard() {
           color="#ffaa00"
         />
       )
-    }
-    if (result.kind === 'rate-limited') {
+    } else if (result.kind === 'rate-limited') {
       let retryIn = result.retryAfterSec ?? 10
-      return (
+      panelNode = (
         <PanelMessage
           line1="RATE LIMITED"
           line2="OPENSKY WAIT"
@@ -53,14 +59,41 @@ export function PlaneCard() {
           color="#ffcc00"
         />
       )
+    } else {
+      panelNode = (
+        <PanelMessage
+          line1="OPENSKY ERR"
+          line2={result.message.slice(0, 14).toUpperCase()}
+          line3="RETRY SOON"
+          color="#ff5522"
+        />
+      )
     }
+
     return (
-      <PanelMessage
-        line1="OPENSKY ERR"
-        line2={result.message.slice(0, 14).toUpperCase()}
-        line3="RETRY SOON"
-        color="#ff5522"
-      />
+      <>
+        {panelNode}
+        <p class="panel-links">
+          {trackIcao24 ? (
+            <>
+              <a
+                class="panel-link"
+                href={liveMapUrl(trackIcao24)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Track {trackIcao24.toUpperCase()} ↗
+              </a>
+              <span class="panel-link-sep" aria-hidden="true">
+                {' · '}
+              </span>
+            </>
+          ) : null}
+          <label for="settings-toggle" class="panel-link settings-inline-link">
+            Settings
+          </label>
+        </p>
+      </>
     )
   }
 }
@@ -184,17 +217,6 @@ function PanelOk() {
           ) : null}
           {stale && note ? <div class="panel-stale-banner">{note}</div> : null}
         </div>
-        <p class="panel-links">
-          <a class="panel-link" href={liveMapUrl(plane.icao24)} target="_blank" rel="noreferrer">
-            Track {plane.icao24.toUpperCase()} ↗
-          </a>
-          <span class="panel-link-sep" aria-hidden="true">
-            {' · '}
-          </span>
-          <label for="settings-toggle" class="panel-link settings-inline-link">
-            Settings
-          </label>
-        </p>
       </>
     )
   }
