@@ -27,10 +27,21 @@ export interface PlaneCardProps {
 export function PlaneCard() {
   return ({ result, route, aircraft }: PlaneCardProps) => {
     let panelNode: RemixNode
-    let trackIcao24: string | null = null
+    // `track` is set only when we have a concrete plane. `icao24`
+    // drives the map deep-link URL (adsbexchange expects the hex);
+    // `label` is what we render in the link — prefer the flight
+    // callsign (e.g. "EWG34D") because that's what the user just
+    // read on line 2. Fall back to the icao24 hex when the plane
+    // has no callsign.
+    let track: { icao24: string; label: string } | null = null
 
     if (result.kind === 'ok' || result.kind === 'ok-stale') {
-      trackIcao24 = result.plane.icao24
+      let icao24 = result.plane.icao24
+      let callsign = result.plane.callsign?.trim() ?? ''
+      track = {
+        icao24,
+        label: callsign.length > 0 ? callsign.toUpperCase() : icao24.toUpperCase(),
+      }
       panelNode = (
         <PanelOk
           plane={result.plane}
@@ -74,15 +85,15 @@ export function PlaneCard() {
       <>
         {panelNode}
         <p class="panel-links">
-          {trackIcao24 ? (
+          {track ? (
             <>
               <a
                 class="panel-link"
-                href={liveMapUrl(trackIcao24)}
+                href={liveMapUrl(track.icao24)}
                 target="_blank"
                 rel="noreferrer"
               >
-                Track {trackIcao24.toUpperCase()} ↗
+                Track {track.label} ↗
               </a>
               <span class="panel-link-sep" aria-hidden="true">
                 |
