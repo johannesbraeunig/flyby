@@ -278,7 +278,12 @@ describe('router', () => {
     assert.equal(res.status, 200)
     let html = await res.text()
     assert.match(html, /PICK A/)
-    assert.doesNotMatch(html, /Lufthansa/)
+    // The locating page must not render any live plane data even
+    // when a flyby_loc cookie exists. Check only the <body> — the
+    // og:image:alt in <head> contains a sample airline name and
+    // would otherwise produce a false positive.
+    let body = html.split('<body>')[1] ?? html
+    assert.doesNotMatch(body, /Lufthansa/)
   })
 
   it('GET / with URL params does NOT emit a Set-Cookie header', async () => {
@@ -339,5 +344,81 @@ describe('router', () => {
     let html = await res.text()
     assert.match(html, /RATE LIMITED/)
     assert.match(html, /RETRY 15S/)
+  })
+
+  // Social-media meta tags. These render on every full HTML response
+  // (locating page + plane page) so a paste into Slack/iMessage/Twitter
+  // unfurls into a real preview card. og:url + og:image MUST be
+  // absolute URLs or scrapers ignore them.
+  it('renders Open Graph + Twitter Card meta tags with absolute URLs', async () => {
+    let res = await router.fetch('http://example.com/?lat=53.5511&lon=9.9937')
+    let html = await res.text()
+    // Open Graph
+    assert.match(html, /<meta property="og:type" content="website"/)
+    assert.match(html, /<meta property="og:site_name" content="FlyBy"/)
+    assert.match(html, /<meta property="og:title" content="FlyBy/)
+    assert.match(html, /<meta property="og:description"/)
+    assert.match(
+      html,
+      /<meta property="og:url" content="http:\/\/example\.com\/\?lat=53\.5511&amp;lon=9\.9937"/,
+    )
+    assert.match(
+      html,
+      /<meta property="og:image" content="http:\/\/example\.com\/og-image\.png"/,
+    )
+    assert.match(html, /<meta property="og:image:width" content="1200"/)
+    assert.match(html, /<meta property="og:image:height" content="630"/)
+    assert.match(html, /<meta property="og:image:alt"/)
+    // Twitter
+    assert.match(
+      html,
+      /<meta name="twitter:card" content="summary_large_image"/,
+    )
+    assert.match(
+      html,
+      /<meta name="twitter:image" content="http:\/\/example\.com\/og-image\.png"/,
+    )
+    // Plain SEO
+    assert.match(html, /<meta name="description"/)
+    assert.match(html, /<link rel="canonical" href="http:\/\/example\.com\//)
+  })
+
+  it('honors FLYBY_PUBLIC_URL when computing absolute URLs', async () => {
+    process.env.FLYBY_PUBLIC_URL = 'https://flyby.example/'
+    try {
+      // The request comes in on internal-host:8080 (e.g. behind a
+      // proxy). The og: tags must use the public origin instead.
+      let res = await router.fetch('http://internal-host:8080/?lat=10&lon=20')
+      let html = await res.text()
+      assert.match(
+        html,
+        /<meta property="og:url" content="https:\/\/flyby\.example\/\?lat=10&amp;lon=20"/,
+      )
+      assert.match(
+        html,
+        /<meta property="og:image" content="https:\/\/flyby\.example\/og-image\.png"/,
+      )
+    } finally {
+      delete process.env.FLYBY_PUBLIC_URL
+    }
+  })
+
+  // Static middleware serves /og-image.png from web/public/.
+  it('serves /og-image.png as a 1200x630 PNG', async () => {
+    let res = await router.fetch('http://localhost/og-image.png')
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type') ?? '', /image\/png/)
+    let buf = new Uint8Array(await res.arrayBuffer())
+    // PNG magic + IHDR width/height (network byte order, big-endian).
+    assert.deepEqual(
+      Array.from(buf.slice(0, 8)),
+      [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+      'starts with PNG signature',
+    )
+    let view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+    let width = view.getUint32(16) // bytes 16-19
+    let height = view.getUint32(20) // bytes 20-23
+    assert.equal(width, 1200)
+    assert.equal(height, 630)
   })
 })

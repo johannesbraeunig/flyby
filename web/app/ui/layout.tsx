@@ -4,6 +4,9 @@ import { Document } from './document.tsx'
 
 export interface LayoutProps {
   title?: string
+  description?: string
+  canonicalUrl?: string
+  ogImageUrl?: string
   children?: RemixNode
 }
 
@@ -11,10 +14,14 @@ export interface LayoutProps {
 // plane panel, full-viewport. Branding and meta links live inside
 // the floating settings overlay rendered by the home controller.
 export function Layout() {
-  return ({ title, children }: LayoutProps) => (
-    <Document title={title}>
+  return ({ title, description, canonicalUrl, ogImageUrl, children }: LayoutProps) => (
+    <Document
+      title={title}
+      description={description}
+      canonicalUrl={canonicalUrl}
+      ogImageUrl={ogImageUrl}
+    >
       <div class="page">{children}</div>
     </Document>
   )
 }
-

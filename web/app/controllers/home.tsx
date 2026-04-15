@@ -17,16 +17,21 @@ import { routes } from '../routes.ts'
 import { Layout } from '../ui/layout.tsx'
 import { PlaneCard } from '../ui/plane-card.tsx'
 import { render } from '../utils/render.tsx'
+import { absoluteUrl, canonicalUrl } from '../utils/site.ts'
 
 export let home: BuildAction<'GET', typeof routes.home> = {
-  async handler({ url }) {
+  async handler({ request, url }) {
     let location = resolveLocation(url)
+    // Compute the absolute URLs once per request — `og:url` and
+    // `og:image` MUST be absolute or social scrapers ignore them.
+    let canonical = canonicalUrl(request)
+    let ogImage = absoluteUrl(request, '/og-image.png')
 
     // First-visit landing page when there are no lat/lon URL params:
     // render the locating screen (no OpenSky call) so the user can
     // explicitly pick "Use my location" or "Use Hamburg".
     if (location.source === 'fallback' && location.fallbackReason === 'no-params') {
-      return render(<LocatingPage />, {
+      return render(<LocatingPage canonicalUrl={canonical} ogImageUrl={ogImage} />, {
         headers: { 'Cache-Control': 'no-store' },
       })
     }
@@ -50,7 +55,14 @@ export let home: BuildAction<'GET', typeof routes.home> = {
     }
 
     return render(
-      <HomePage location={location} result={result} route={route} aircraft={aircraft} />,
+      <HomePage
+        location={location}
+        result={result}
+        route={route}
+        aircraft={aircraft}
+        canonicalUrl={canonical}
+        ogImageUrl={ogImage}
+      />,
       { headers: { 'Cache-Control': 'no-store' } },
     )
   },
@@ -61,18 +73,24 @@ interface HomePageProps {
   result: Awaited<ReturnType<typeof getNearestAircraft>>
   route: Awaited<ReturnType<typeof getRoute>>
   aircraft: Awaited<ReturnType<typeof getAircraft>>
+  canonicalUrl: string
+  ogImageUrl: string
 }
 
 const REPO_URL = 'https://github.com/johannesbraeunig/flyby'
 
 function HomePage() {
-  return ({ location, result, route, aircraft }: HomePageProps) => {
+  return ({ location, result, route, aircraft, canonicalUrl, ogImageUrl }: HomePageProps) => {
     let pollUrl =
       `/api/nearest?lat=${location.lat}` +
       `&lon=${location.lon}` +
       `&radius=${location.radiusKm}`
     return (
-      <Layout title="FlyBy — nearest plane">
+      <Layout
+        title="FlyBy — nearest plane"
+        canonicalUrl={canonicalUrl}
+        ogImageUrl={ogImageUrl}
+      >
         <main class="stage">
           <div
             id="plane-card"
@@ -193,9 +211,18 @@ function HomePage() {
   }
 }
 
+interface LocatingPageProps {
+  canonicalUrl: string
+  ogImageUrl: string
+}
+
 function LocatingPage() {
-  return () => (
-    <Layout title="FlyBy — choose location">
+  return ({ canonicalUrl, ogImageUrl }: LocatingPageProps) => (
+    <Layout
+      title="FlyBy — choose location"
+      canonicalUrl={canonicalUrl}
+      ogImageUrl={ogImageUrl}
+    >
       <main class="stage">
         <div class="plane-card">
           <div class="panel" data-fly-state="locating">
