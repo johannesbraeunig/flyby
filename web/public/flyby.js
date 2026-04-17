@@ -81,6 +81,51 @@
     var inFlight = false
     var timer = null
 
+    var panel = card.querySelector('.panel')
+
+    // First-load entrance: stagger-reveal panel lines.
+    // .panel-entering on the panel hides lines via CSS.
+    // .panel-entered on each line triggers the animation.
+    // After the last line, remove .panel-entering so future
+    // innerHTML replacements show lines immediately.
+    // Countdown bar: a thin amber bar at the top of the viewport
+    // that shrinks over the poll interval.
+    var countdownBar = document.createElement('div')
+    countdownBar.className = 'countdown-bar'
+    countdownBar.style.setProperty('--poll-duration', intervalSec + 's')
+    document.body.appendChild(countdownBar)
+
+    function resetCountdown() {
+      countdownBar.classList.remove('countdown-active')
+      void countdownBar.offsetWidth
+      countdownBar.classList.add('countdown-active')
+    }
+    resetCountdown()
+
+    function entranceOnce() {
+      if (!panel) return
+      var lines = panel.querySelectorAll('.panel-line')
+      if (lines.length === 0) return
+      panel.classList.add('panel-entering')
+      var last = lines.length - 1
+      lines.forEach(function (line, i) {
+        line.style.animationDelay = (i * 80) + 'ms'
+        line.classList.add('panel-entered')
+        line.addEventListener('animationend', function () {
+          line.style.animationDelay = ''
+          if (i === last) {
+            panel.classList.remove('panel-entering')
+          }
+        }, { once: true })
+      })
+      // Fallback if animations don't fire.
+      setTimeout(function () {
+        panel.classList.remove('panel-entering')
+      }, 1500)
+    }
+    entranceOnce()
+
+
     function tick() {
       if (inFlight) return
       if (document.hidden) return
@@ -91,10 +136,45 @@
           return res.text()
         })
         .then(function (html) {
-          // The endpoint returns just the <div class="panel">. Replace
-          // the panel inside #plane-card without touching the wrapper
-          // (so the data-fly-poll attribute and id stick around).
+          // Snapshot current values by position index — labels like
+          // "ALT (11575M)" change every poll (the metric updates), so
+          // keying by label text would miss them. Position is stable.
+          var oldStatValues = []
+          card.querySelectorAll('.stat-value').forEach(function (el) {
+            oldStatValues.push(el.textContent)
+          })
+          var oldLine1El = card.querySelector('.panel-line-1')
+          var oldLine1 = oldLine1El ? oldLine1El.textContent.trim() : ''
+
+          // Replace the panel markup.
           card.innerHTML = html
+
+          // Collect changed elements in DOM order for staggered roll-in.
+          var changed = []
+          // Line 1 (airline) first.
+          var newLine1El = card.querySelector('.panel-line-1')
+          if (newLine1El && oldLine1 && newLine1El.textContent.trim() !== oldLine1) {
+            changed.push(newLine1El)
+          }
+          // Stat values by position index.
+          card.querySelectorAll('.stat-value').forEach(function (el, i) {
+            if (i < oldStatValues.length && oldStatValues[i] !== el.textContent) {
+              changed.push(el)
+            }
+          })
+          // Stagger: each changed value rolls in 80ms after the previous.
+          var STAGGER_MS = 80
+          changed.forEach(function (el, i) {
+            el.style.animationDelay = (i * STAGGER_MS) + 'ms'
+            el.classList.add('value-fresh')
+            el.addEventListener('animationend', function () {
+              el.classList.remove('value-fresh')
+              el.style.animationDelay = ''
+            }, { once: true })
+          })
+
+          // Restart countdown bar.
+          resetCountdown()
         })
         .catch(function (err) {
           console.warn('flyby poll failed', err)

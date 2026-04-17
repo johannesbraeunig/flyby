@@ -21,12 +21,13 @@ import { render } from '../utils/render.tsx'
 export let home: BuildAction<'GET', typeof routes.home> = {
   async handler({ url }) {
     let location = resolveLocation(url)
+    let origin = new URL(url).origin
 
     // First-visit landing page when there are no lat/lon URL params:
     // render the locating screen (no OpenSky call) so the user can
     // explicitly pick "Use my location" or "Use Hamburg".
     if (location.source === 'fallback' && location.fallbackReason === 'no-params') {
-      return render(<LocatingPage />, {
+      return render(<LocatingPage origin={origin} />, {
         headers: { 'Cache-Control': 'no-store' },
       })
     }
@@ -50,7 +51,13 @@ export let home: BuildAction<'GET', typeof routes.home> = {
     }
 
     return render(
-      <HomePage location={location} result={result} route={route} aircraft={aircraft} />,
+      <HomePage
+        location={location}
+        result={result}
+        route={route}
+        aircraft={aircraft}
+        origin={origin}
+      />,
       { headers: { 'Cache-Control': 'no-store' } },
     )
   },
@@ -61,18 +68,19 @@ interface HomePageProps {
   result: Awaited<ReturnType<typeof getNearestAircraft>>
   route: Awaited<ReturnType<typeof getRoute>>
   aircraft: Awaited<ReturnType<typeof getAircraft>>
+  origin: string
 }
 
 const REPO_URL = 'https://github.com/johannesbraeunig/flyby'
 
 function HomePage() {
-  return ({ location, result, route, aircraft }: HomePageProps) => {
+  return ({ location, result, route, aircraft, origin }: HomePageProps) => {
     let pollUrl =
       `/api/nearest?lat=${location.lat}` +
       `&lon=${location.lon}` +
       `&radius=${location.radiusKm}`
     return (
-      <Layout title="FlyBy — nearest plane">
+      <Layout title="FlyBy — who's up there?" origin={origin}>
         <main class="stage">
           <div
             id="plane-card"
@@ -194,14 +202,14 @@ function HomePage() {
 }
 
 function LocatingPage() {
-  return () => (
-    <Layout title="FlyBy — choose location">
+  return ({ origin }: { origin: string }) => (
+    <Layout title="FlyBy — who's up there?" origin={origin}>
       <main class="stage">
         <div class="plane-card">
           <div class="panel" data-fly-state="locating">
             <div class="panel-line panel-line-1">FLYBY</div>
-            <div class="panel-line panel-line-2">PICK A</div>
-            <div class="panel-line panel-line-3">LOCATION</div>
+            <div class="panel-line panel-line-2">PICK YOUR LOCATION</div>
+            <div class="panel-line panel-line-3">TO SEE PLANES NEARBY</div>
           </div>
           <div class="locating-choices">
             <button id="allow-location-btn" type="button" class="btn-primary">

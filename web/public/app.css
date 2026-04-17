@@ -52,6 +52,41 @@ body {
   background-size: 10px 10px;
 }
 
+/* ───── Poll countdown bar ─────
+   A thin amber bar pinned to the top of the viewport that
+   shrinks right→left over the poll interval. JS sets
+   --poll-duration and toggles .countdown-active to restart. */
+.countdown-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: #664400;
+  z-index: 200;
+}
+
+.countdown-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--led-amber);
+  opacity: 0.8;
+  transform-origin: left;
+}
+
+.countdown-bar.countdown-active::after {
+  animation: countdown-shrink var(--poll-duration, 30s) linear forwards;
+}
+
+@keyframes countdown-shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
 .page {
   min-height: 100vh;
   min-height: 100dvh;
@@ -107,16 +142,6 @@ body {
    Variation is small enough (±3%) that you can't "see" it
    pulsing, but your eye picks up the low-frequency rhythm.
    Feels like a slightly loose power supply. */
-@media (prefers-reduced-motion: no-preference) {
-  .panel {
-    animation: panel-breathe 6.5s ease-in-out infinite;
-  }
-}
-
-@keyframes panel-breathe {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(0.94); }
-}
 
 /* CRT scanline overlay — sells the "this is a physical display"
    illusion that the dot-grid background started. A repeating
@@ -154,6 +179,41 @@ body {
   }
 }
 
+/* ───── First-load entrance ─────
+   Panel lines start hidden via .panel-line on [data-fly-state="ok"]
+   panels, then JS adds .panel-entered to reveal them with a
+   staggered slide-up. If JS fails or reduced-motion is on, the
+   .panel-ready class (added by JS immediately) makes them visible
+   without animation. */
+@media (prefers-reduced-motion: no-preference) {
+  /* .panel-entering is added by JS on first load only.
+     Lines start hidden, then .panel-entered reveals each one. */
+  .panel-entering .panel-line {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  .panel-entering .panel-entered {
+    animation: panel-enter 250ms ease-out both;
+  }
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ───── Text glow breathing ─────
+   The text-shadow bloom gently pulses — the outer halo grows
+   and shrinks on a 7 s cycle, simulating slight voltage ripple
+   in the LED driver. Offset from the panel-breathe (6.5 s) so
+   the two rhythms don't sync, which would look mechanical. */
 .panel-line {
   font-family: var(--font-display);
   font-weight: 400;
@@ -167,6 +227,27 @@ body {
   letter-spacing: 0.04em;
   user-select: none;
   text-align: left;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel-line {
+    animation: glow-breathe 7s ease-in-out infinite;
+  }
+}
+
+@keyframes glow-breathe {
+  0%, 100% {
+    text-shadow:
+      0 0 18px var(--led-glow),
+      0 0 6px var(--led-glow),
+      0 0 2px var(--led-glow);
+  }
+  50% {
+    text-shadow:
+      0 0 24px var(--led-glow),
+      0 0 10px var(--led-glow),
+      0 0 3px rgba(255, 200, 80, 0.7);
+  }
 }
 
 .panel-line-1 {
@@ -189,6 +270,40 @@ body {
   font-size: clamp(2.25rem, 8vw, 7rem);
   color: var(--led-amber-soft);
   opacity: 0.92;
+}
+
+/* ───── Value-fresh roll-in ─────
+   When a stat value changes on poll, JS adds .value-fresh.
+   The text rolls up from below (split-flap / Solari style)
+   and blooms warm-white at the start, settling back to amber.
+   The parent .stat has overflow:hidden so the slide clips
+   cleanly at the stat's boundary. */
+.value-fresh {
+  animation: value-roll-in 500ms cubic-bezier(0.22, 0.9, 0.36, 1);
+  /* backwards: stay at keyframe 0% (hidden, translated down)
+     during the stagger delay so values don't flash in place
+     before their turn to roll. */
+  animation-fill-mode: backwards;
+}
+
+@keyframes value-roll-in {
+  0% {
+    transform: translateY(80%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+    color: #fff4d6;
+    text-shadow:
+      0 0 24px rgba(255, 220, 120, 0.9),
+      0 0 10px rgba(255, 200, 80, 0.8),
+      0 0 3px #ffe8aa;
+  }
+  100% {
+    transform: translateY(0);
+    color: inherit;
+    text-shadow: inherit;
+  }
 }
 
 /* Panel stats rows (lines 2, 3, 4): labelled stats in a row.
@@ -229,6 +344,8 @@ body {
   align-items: flex-start;
   line-height: 0.9;
   text-align: left;
+  /* Clip the roll-in: value slides up from below this box. */
+  overflow: hidden;
 }
 
 .stat-label {
@@ -254,6 +371,10 @@ body {
 
 .panel[data-fly-state='locating'] .panel-line-1 {
   animation: blink 1.4s ease-in-out infinite;
+}
+
+.panel[data-fly-state='locating'] {
+  gap: clamp(0.3rem, 1vw, 0.8rem);
 }
 
 .panel-stale-banner {
@@ -392,10 +513,10 @@ body {
 
 .locating-choices {
   display: flex;
+  flex-direction: column;
   gap: 1rem;
-  justify-content: center;
+  align-items: flex-start;
   margin-top: 1rem;
-  flex-wrap: wrap;
 }
 
 .btn-primary,
@@ -447,7 +568,7 @@ body {
   font-family: var(--font-ui);
   font-size: 0.85rem;
   color: var(--ui-muted);
-  text-align: center;
+  text-align: left;
   max-width: 28rem;
 }
 
@@ -669,9 +790,45 @@ body {
 /* ───── Narrow viewports ───── */
 
 @media (max-width: 560px) {
+  /* Uniform vertical rhythm on mobile: every panel line gets
+     the same gap. Remove the line-2 negative margin that
+     creates uneven spacing on small screens. */
   .panel {
-    padding: 1.5rem 1rem;
-    gap: 0.4rem;
+    padding: 0.75rem 0.75rem;
+    gap: 0.6rem;
+  }
+
+  .panel-line-2 {
+    margin-top: 0;
+  }
+
+  /* Tighter stat gaps so 4 stats pair into 2×2. */
+  .panel-stats {
+    column-gap: clamp(1rem, 4vw, 2rem);
+    row-gap: 0.4rem;
+  }
+
+  /* Force 2 stats per row on line 3. */
+  .panel-line-3 .stat {
+    min-width: calc(50% - 1rem);
+    flex: 0 0 auto;
+  }
+
+  /* Footer: match the panel's left padding so it aligns
+     with the stat text above. */
+  .panel-links {
+    font-size: 0.85rem;
+    padding: 0.3rem 0 0 0.75rem;
+  }
+
+  /* Locating page: align buttons and help text with
+     the panel's padded content. */
+  .locating-choices {
+    padding-left: 0.75rem;
+  }
+
+  .locating-help {
+    padding-left: 0.75rem;
   }
 
   .settings-panel {
