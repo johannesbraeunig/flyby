@@ -50,9 +50,6 @@ void compose(const adsb::Plane& plane,
 
 void compose_idle(Frame* out);
 
-// Field formatters.
-void format_flight_level(float alt_m, char* out, size_t out_size);
-void format_speed_kt(float vel_mps, char* out, size_t out_size);
 void format_distance_km(float dist_km, char* out, size_t out_size);
 
 inline int text_width_px(const char* text) {

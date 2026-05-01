@@ -19,26 +19,6 @@ void copy_into(char* dst, size_t dst_size, const char* src) {
 
 }  // namespace
 
-void format_flight_level(float alt_m, char* out, size_t out_size) {
-  if (!out || out_size == 0) return;
-  if (std::isnan(alt_m) || alt_m < 0.0f) {
-    std::snprintf(out, out_size, "FL---");
-    return;
-  }
-  const int fl = static_cast<int>(std::round(alt_m * 3.28084f / 100.0f));
-  std::snprintf(out, out_size, "FL%03d", fl);
-}
-
-void format_speed_kt(float vel_mps, char* out, size_t out_size) {
-  if (!out || out_size == 0) return;
-  if (std::isnan(vel_mps) || vel_mps < 0.0f) {
-    std::snprintf(out, out_size, "---kt");
-    return;
-  }
-  const int kt = static_cast<int>(std::round(vel_mps * 1.94384f));
-  std::snprintf(out, out_size, "%dkt", kt);
-}
-
 void format_distance_km(float dist_km, char* out, size_t out_size) {
   if (!out || out_size == 0) return;
   if (std::isnan(dist_km) || dist_km < 0.0f) {

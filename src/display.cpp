@@ -1,7 +1,6 @@
 #include "display.h"
 
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
-#include <Fonts/TomThumb.h>
 
 namespace display {
 namespace {
@@ -15,9 +14,6 @@ constexpr int kChain = 1;
 constexpr uint8_t kBrightness = 60;
 
 MatrixPanel_I2S_DMA* panel = nullptr;
-
-const GFXfont* defaultFont = nullptr;  // built-in 5x7
-const GFXfont* smallFont   = &TomThumb;
 
 }  // namespace
 
@@ -47,34 +43,16 @@ void clear() {
   if (panel) panel->clearScreen();
 }
 
-void fillSolid(uint16_t color) {
-  if (panel) panel->fillScreen(color);
-}
-
 uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
 void drawText(int x, int y, const char* text, uint16_t color) {
   if (!panel || !text) return;
-  panel->setFont(defaultFont);
+  panel->setFont(nullptr);
   panel->setTextColor(color);
   panel->setCursor(x, y);
   panel->print(text);
-}
-
-void drawTextSmall(int x, int y, const char* text, uint16_t color) {
-  if (!panel || !text) return;
-  panel->setFont(smallFont);
-  panel->setTextColor(color);
-  // TomThumb baseline is at the bottom of the glyph, so y is baseline.
-  panel->setCursor(x, y + 5);
-  panel->print(text);
-}
-
-void drawPixel(int x, int y, uint16_t color) {
-  if (!panel) return;
-  panel->drawPixel(x, y, color);
 }
 
 void flush() {
