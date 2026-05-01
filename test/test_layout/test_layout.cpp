@@ -1,5 +1,3 @@
-// Native unit tests for layout:: formatting, composition, and scroll.
-
 #include <unity.h>
 
 #include <cmath>
@@ -17,7 +15,6 @@ void tearDown(void) {}
 void test_format_flight_level_typical(void) {
   char buf[16];
   layout::format_flight_level(11000.0f, buf, sizeof(buf));
-  // 11000 m × 3.28084 / 100 = 360.89 → FL361
   TEST_ASSERT_EQUAL_STRING("FL361", buf);
 }
 
@@ -44,7 +41,6 @@ void test_format_flight_level_negative(void) {
 void test_format_speed_kt_typical(void) {
   char buf[16];
   layout::format_speed_kt(257.0f, buf, sizeof(buf));
-  // 257 × 1.94384 ≈ 499.6 → 500
   TEST_ASSERT_EQUAL_STRING("500kt", buf);
 }
 
@@ -80,18 +76,19 @@ void test_format_distance_km_nan(void) {
   TEST_ASSERT_EQUAL_STRING("--km", buf);
 }
 
-// ---- format_stats_line ---------------------------------------------------
+// ---- vrate_trend ---------------------------------------------------------
 
-void test_format_stats_line_combines_fields(void) {
-  char buf[64];
-  layout::format_stats_line(11000.0f, 257.0f, 4.234f, buf, sizeof(buf));
-  TEST_ASSERT_EQUAL_STRING("FL361 500kt 4.2km", buf);
+void test_vrate_trend_climbing(void) {
+  TEST_ASSERT_EQUAL_CHAR('^', layout::vrate_trend(5.0f));
 }
 
-void test_format_stats_line_handles_nans(void) {
-  char buf[64];
-  layout::format_stats_line(NAN, NAN, NAN, buf, sizeof(buf));
-  TEST_ASSERT_EQUAL_STRING("FL--- ---kt --km", buf);
+void test_vrate_trend_descending(void) {
+  TEST_ASSERT_EQUAL_CHAR('v', layout::vrate_trend(-5.0f));
+}
+
+void test_vrate_trend_level(void) {
+  TEST_ASSERT_EQUAL_CHAR('=', layout::vrate_trend(0.5f));
+  TEST_ASSERT_EQUAL_CHAR('=', layout::vrate_trend(NAN));
 }
 
 // ---- compose -------------------------------------------------------------
@@ -108,107 +105,83 @@ void test_compose_with_known_airline(void) {
   TEST_ASSERT_NOT_NULL(airline);
 
   layout::Frame f;
-  layout::compose(p, airline, &f);
+  layout::compose(p, airline, &f, 1000);
 
-  TEST_ASSERT_EQUAL_STRING("Lufthansa", f.line1.text);
-  // Brand color matches the table entry.
-  TEST_ASSERT_EQUAL_UINT8(airline->r, f.line1.r);
-  TEST_ASSERT_EQUAL_UINT8(airline->g, f.line1.g);
-  TEST_ASSERT_EQUAL_UINT8(airline->b, f.line1.b);
-
-  TEST_ASSERT_EQUAL_STRING("DLH441", f.line2.text);
-  TEST_ASSERT_EQUAL_STRING("FL361 486kt 4.2km", f.line3.text);
+  TEST_ASSERT_EQUAL_STRING("DLH441", f.callsign);
+  TEST_ASSERT_EQUAL_UINT8(airline->r, f.cs_r);
+  TEST_ASSERT_EQUAL_UINT8(airline->g, f.cs_g);
+  TEST_ASSERT_EQUAL_UINT8(airline->b, f.cs_b);
+  TEST_ASSERT_EQUAL_STRING("", f.route);
+  TEST_ASSERT_EQUAL_STRING("4.2km", f.distance);
+  TEST_ASSERT_FALSE(f.is_idle);
 }
 
-void test_compose_with_unknown_airline_uses_icao_prefix(void) {
+void test_compose_with_unknown_airline(void) {
   adsb::Plane p;
   adsb::plane_clear(&p);
   std::strcpy(p.callsign, "ZZZ999");
-  p.alt_m = 5000.0f;
-  p.vel_mps = 200.0f;
   p.distance_km = 12.0f;
 
   layout::Frame f;
-  layout::compose(p, /*airline=*/nullptr, &f);
+  layout::compose(p, nullptr, &f, 1000);
 
-  TEST_ASSERT_EQUAL_STRING("ZZZ", f.line1.text);
-  TEST_ASSERT_EQUAL_UINT8(255, f.line1.r);
-  TEST_ASSERT_EQUAL_UINT8(255, f.line1.g);
-  TEST_ASSERT_EQUAL_UINT8(255, f.line1.b);
-  TEST_ASSERT_EQUAL_STRING("ZZZ999", f.line2.text);
+  TEST_ASSERT_EQUAL_STRING("ZZZ999", f.callsign);
+  TEST_ASSERT_EQUAL_UINT8(255, f.cs_r);
 }
 
-void test_compose_marks_long_text_for_scroll(void) {
-  // Stats line at FL361 486kt 4.2km is 17 chars × 6 px = 102 px > 64,
-  // so line3 should be flagged for scrolling.
+void test_compose_with_route(void) {
   adsb::Plane p;
   adsb::plane_clear(&p);
-  std::strcpy(p.callsign, "DLH441");
-  p.alt_m = 11000.0f;
-  p.vel_mps = 250.0f;
-  p.distance_km = 4.2f;
+  std::strcpy(p.callsign, "AFR123");
+  std::strcpy(p.origin, "CDG");
+  std::strcpy(p.destination, "HAM");
+  p.distance_km = 3.0f;
 
   layout::Frame f;
-  layout::compose(p, airlines::lookup("DLH441"), &f);
-  TEST_ASSERT_TRUE(f.line3.scroll);
-  TEST_ASSERT_FALSE(f.line1.scroll);  // "Lufthansa" is 9 chars × 6 = 54 px
+  layout::compose(p, nullptr, &f, 1000);
+
+  TEST_ASSERT_EQUAL_STRING("CDG>HAM", f.route);
+  // Green because < 5km
+  TEST_ASSERT_EQUAL_UINT8(0, f.dist_r);
+  TEST_ASSERT_EQUAL_UINT8(255, f.dist_g);
 }
 
 void test_compose_idle(void) {
   layout::Frame f;
   layout::compose_idle(&f);
-  TEST_ASSERT_EQUAL_STRING("FlyBy", f.line1.text);
-  TEST_ASSERT_EQUAL_STRING("no planes", f.line2.text);
-  TEST_ASSERT_EQUAL_STRING("", f.line3.text);
-  TEST_ASSERT_FALSE(f.line1.scroll);
-  TEST_ASSERT_FALSE(f.line2.scroll);
+  TEST_ASSERT_EQUAL_STRING("FlyBy", f.callsign);
+  TEST_ASSERT_TRUE(f.is_idle);
 }
 
 // ---- scroll_x_offset -----------------------------------------------------
 
-void test_scroll_no_overflow_returns_zero(void) {
-  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(50, 64, 1000, 20));
-  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(64, 64, 1000, 20));
+void test_scroll_short_text_no_scroll(void) {
+  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset("ABC", 5000, 0));
 }
 
-void test_scroll_at_t0_starts_at_zero(void) {
-  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(128, 64, 0, 64));
+void test_scroll_pause_at_start(void) {
+  // Long text but within pause window.
+  const char* long_text = "B748 : FL361= : 486kt : Lufthansa : Extra padding text here!!";
+  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(long_text, 500, 0));
 }
 
-void test_scroll_progresses_left(void) {
-  // text 128, panel 64, range = 64. speed 64 px/s → half period 1000 ms.
-  TEST_ASSERT_EQUAL_INT(-32, layout::scroll_x_offset(128, 64, 500, 64));
+void test_scroll_moves_after_pause(void) {
+  const char* long_text = "B748 : FL361= : 486kt : Lufthansa : Extra padding text here!!";
+  int offset = layout::scroll_x_offset(long_text, 2000, 0);
+  TEST_ASSERT_TRUE(offset < 0);
 }
 
-void test_scroll_at_full_left(void) {
-  // After exactly half period the offset is back to -range / +0 boundary.
-  // Implementation: at t == half_period_ms we enter the "right" branch
-  // with back == 0, returning -range.
-  TEST_ASSERT_EQUAL_INT(-64, layout::scroll_x_offset(128, 64, 1000, 64));
-}
-
-void test_scroll_returns_toward_zero(void) {
-  // 1500 ms is mid-way through the right-bound half: -64 + 32 = -32.
-  TEST_ASSERT_EQUAL_INT(-32, layout::scroll_x_offset(128, 64, 1500, 64));
-}
-
-void test_scroll_period_loops(void) {
-  // Full period is 2000 ms; at exactly that boundary we're back to t = 0.
-  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(128, 64, 2000, 64));
-}
-
-void test_scroll_zero_or_negative_speed_returns_zero(void) {
-  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(128, 64, 1000, 0));
-  TEST_ASSERT_EQUAL_INT(0, layout::scroll_x_offset(128, 64, 1000, -10));
-}
-
-// ---- text_width_px (header inline) ---------------------------------------
+// ---- text_width_px -------------------------------------------------------
 
 void test_text_width_px(void) {
-  TEST_ASSERT_EQUAL_INT(0,  layout::text_width_px(""));
-  TEST_ASSERT_EQUAL_INT(0,  layout::text_width_px(nullptr));
-  TEST_ASSERT_EQUAL_INT(30, layout::text_width_px("FlyBy"));   // 5 × 6
-  TEST_ASSERT_EQUAL_INT(54, layout::text_width_px("Lufthansa")); // 9 × 6
+  TEST_ASSERT_EQUAL_INT(0, layout::text_width_px(""));
+  TEST_ASSERT_EQUAL_INT(0, layout::text_width_px(nullptr));
+  TEST_ASSERT_EQUAL_INT(30, layout::text_width_px("FlyBy"));
+  TEST_ASSERT_EQUAL_INT(54, layout::text_width_px("Lufthansa"));
+}
+
+void test_text_width_small_px(void) {
+  TEST_ASSERT_EQUAL_INT(20, layout::text_width_small_px("FlyBy"));
 }
 
 int main(int, char**) {
@@ -227,23 +200,21 @@ int main(int, char**) {
   RUN_TEST(test_format_distance_km_far);
   RUN_TEST(test_format_distance_km_nan);
 
-  RUN_TEST(test_format_stats_line_combines_fields);
-  RUN_TEST(test_format_stats_line_handles_nans);
+  RUN_TEST(test_vrate_trend_climbing);
+  RUN_TEST(test_vrate_trend_descending);
+  RUN_TEST(test_vrate_trend_level);
 
   RUN_TEST(test_compose_with_known_airline);
-  RUN_TEST(test_compose_with_unknown_airline_uses_icao_prefix);
-  RUN_TEST(test_compose_marks_long_text_for_scroll);
+  RUN_TEST(test_compose_with_unknown_airline);
+  RUN_TEST(test_compose_with_route);
   RUN_TEST(test_compose_idle);
 
-  RUN_TEST(test_scroll_no_overflow_returns_zero);
-  RUN_TEST(test_scroll_at_t0_starts_at_zero);
-  RUN_TEST(test_scroll_progresses_left);
-  RUN_TEST(test_scroll_at_full_left);
-  RUN_TEST(test_scroll_returns_toward_zero);
-  RUN_TEST(test_scroll_period_loops);
-  RUN_TEST(test_scroll_zero_or_negative_speed_returns_zero);
+  RUN_TEST(test_scroll_short_text_no_scroll);
+  RUN_TEST(test_scroll_pause_at_start);
+  RUN_TEST(test_scroll_moves_after_pause);
 
   RUN_TEST(test_text_width_px);
+  RUN_TEST(test_text_width_small_px);
 
   return UNITY_END();
 }

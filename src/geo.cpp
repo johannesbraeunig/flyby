@@ -37,4 +37,25 @@ BBox bbox_for(double lat, double lon, double radius_km) {
   return {lat - dLat, lon - dLon, lat + dLat, lon + dLon};
 }
 
+double bearing_deg(double lat1, double lon1, double lat2, double lon2) {
+  const double phi1 = lat1 * kDegToRad;
+  const double phi2 = lat2 * kDegToRad;
+  const double dLon = (lon2 - lon1) * kDegToRad;
+  const double y = std::sin(dLon) * std::cos(phi2);
+  const double x = std::cos(phi1) * std::sin(phi2) -
+                   std::sin(phi1) * std::cos(phi2) * std::cos(dLon);
+  double deg = std::atan2(y, x) / kDegToRad;
+  if (deg < 0) deg += 360.0;
+  return deg;
+}
+
+const char* bearing_to_compass(double bearing) {
+  // 8 sectors, 45° each, offset by 22.5° so N is 0±22.5°.
+  while (bearing < 0) bearing += 360.0;
+  while (bearing >= 360.0) bearing -= 360.0;
+  int sector = static_cast<int>((bearing + 22.5) / 45.0) % 8;
+  static const char* labels[] = {"N", "NO", "O", "SO", "S", "SW", "W", "NW"};
+  return labels[sector];
+}
+
 }  // namespace geo

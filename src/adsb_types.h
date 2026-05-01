@@ -1,28 +1,24 @@
-// FlyBy ADS-B — types shared between the parser, the HTTP client, and main.
-//
-// Pure C++, Arduino-free, host-testable.
-
 #pragma once
 
 #include <math.h>
 
 namespace adsb {
 
-// One aircraft as we care about it. Sized to live on the stack.
-//
-// Strings use fixed buffers (no String, no heap) so the parser can write
-// directly into a stack-allocated Plane and the rendering layer can read
-// without further allocation.
 struct Plane {
-  char icao24[7];     // 6 hex chars + null
-  char callsign[9];   // up to 8 chars + null, trimmed of trailing spaces
+  char icao24[7];
+  char callsign[9];
   double lat;
   double lon;
-  float  alt_m;       // barometric altitude in meters; NaN if unknown
-  float  vel_mps;     // ground speed in m/s; NaN if unknown
-  float  hdg_deg;     // true track in degrees; NaN if unknown
+  float  alt_m;
+  float  vel_mps;
+  float  hdg_deg;
+  float  vrate_mps;     // vertical rate in m/s; positive = climbing
   bool   on_ground;
-  float  distance_km; // populated by parser when given an observer position
+  float  distance_km;
+  float  bearing_deg;
+  char   origin[5];
+  char   destination[5];
+  char   aircraft_type[5]; // ICAO type code (e.g. "B748", "A20N")
 };
 
 inline void plane_clear(Plane* p) {
@@ -33,8 +29,13 @@ inline void plane_clear(Plane* p) {
   p->alt_m = NAN;
   p->vel_mps = NAN;
   p->hdg_deg = NAN;
+  p->vrate_mps = NAN;
   p->on_ground = false;
   p->distance_km = NAN;
+  p->bearing_deg = NAN;
+  p->origin[0] = 0;
+  p->destination[0] = 0;
+  p->aircraft_type[0] = 0;
 }
 
 }  // namespace adsb

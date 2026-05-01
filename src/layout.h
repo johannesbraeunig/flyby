@@ -1,9 +1,3 @@
-// FlyBy layout — pure-C++ layout, formatting, and scroll math.
-//
-// Builds the 3-line frame the renderer should draw, and provides the
-// formatting helpers for individual fields. No Arduino dependencies, so
-// every behavior here is verifiable with native unit tests.
-
 #pragma once
 
 #include <stddef.h>
@@ -14,62 +8,53 @@
 
 namespace layout {
 
-// Panel + font geometry. Default Adafruit GFX font is 5×7 with 1px
-// kerning, so each glyph occupies a 6×8 cell.
+// ── Tunable constants ──────────────────────────────────────────────
+
 constexpr int kPanelWidth  = 64;
 constexpr int kPanelHeight = 32;
-constexpr int kCharWidth   = 6;
-constexpr int kCharHeight  = 8;
 
-// Y baseline (top of glyph) for each of the three lines.
-constexpr int kLine1Y = 0;
-constexpr int kLine2Y = 11;
-constexpr int kLine3Y = 22;
+// Default font: 5x7, cell 6x8.
+constexpr int kCharWidth  = 6;
+constexpr int kCharHeight = 8;
 
-// Default scroll speed in pixels per second.
-constexpr int kScrollSpeedPxPerSec = 20;
+// 3 lines × 8px = 24px, centered in 32px.
+constexpr int kLine1Y = 1;
+constexpr int kLine2Y = 12;
+constexpr int kLine3Y = 23;
 
-// One line of the rendered frame.
-struct Line {
-  char    text[32];   // null-terminated; longer text triggers scroll
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-  bool    scroll;     // true if text overflows panel width
-};
+// Distance color thresholds.
+constexpr float kDistGreenKm  = 5.0f;
+constexpr float kDistYellowKm = 20.0f;
 
-// The three composed lines.
+// ── Types ──────────────────────────────────────────────────────────
+
 struct Frame {
-  Line line1;
-  Line line2;
-  Line line3;
+  // Line 1: callsign + aircraft type (e.g. "DLH441 B748").
+  char    line1[20];
+  uint8_t l1_r, l1_g, l1_b;
+
+  // Line 2: route (e.g. "FRA > JFK").
+  char    line2[16];
+  uint8_t l2_r, l2_g, l2_b;
+
+  // Line 3: speed, distance, direction.
+  char    line3[24];
+  uint8_t l3_r, l3_g, l3_b;
+
+  bool is_idle;
 };
 
-// Build the frame for a tracked plane. `airline` may be null when the
-// callsign doesn't match any entry in airlines::table().
 void compose(const adsb::Plane& plane,
              const airlines::Entry* airline,
              Frame* out);
 
-// Build the idle "no planes nearby" frame.
 void compose_idle(Frame* out);
 
-// Field formatters. All are NaN-safe and bounds-safe; they always
-// null-terminate the output buffer.
+// Field formatters.
 void format_flight_level(float alt_m, char* out, size_t out_size);
 void format_speed_kt(float vel_mps, char* out, size_t out_size);
 void format_distance_km(float dist_km, char* out, size_t out_size);
-void format_stats_line(float alt_m, float vel_mps, float dist_km,
-                       char* out, size_t out_size);
 
-// Marquee scroll: linear ping-pong between x = 0 and x = -(text_w - panel_w).
-// Returns 0 if the text fits or the speed is non-positive.
-int scroll_x_offset(int text_width_px,
-                    int panel_width_px,
-                    uint32_t elapsed_ms,
-                    int speed_px_per_sec);
-
-// Convenience: text width in pixels for the default 5×7 font.
 inline int text_width_px(const char* text) {
   if (!text) return 0;
   int n = 0;

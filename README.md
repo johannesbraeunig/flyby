@@ -1,97 +1,183 @@
 # FlyBy
 
-A DIY real-time flight tracker display built with an **ESP32** and a **64×32 RGB LED matrix panel** (HUB75). It shows the nearest aircraft overhead — airline name (in brand color), flight number, route, altitude, speed, and distance — refreshing every 30 seconds.
+A DIY real-time flight tracker built with an **ESP32** and a **64x32 RGB LED matrix panel**. Shows the nearest aircraft overhead — airline name in brand color, route, distance, and compass direction — refreshing every 30 seconds.
 
-Inspired by [nearestplane.com](https://nearestplane.com), but fully DIY for ~30€.
+Total cost: ~30 EUR.
 
-## Features
+## What it looks like
 
-- Nearest-aircraft lookup via ADS-B API (OpenSky Network)
-- 3-line layout on a 64×32 P4 HUB75 panel
-- Airline → brand color lookup for line 1
-- Scrolling text for overflow
-- 30 s refresh cadence
-- WiFi captive portal for first-time setup (SSID, password, lat/lon, radius)
-- Configurable search radius, persisted to NVS
+```
+     Condor           <- airline name (brand color)
+   FRA > JFK          <- route (origin > destination)
+    12km NO           <- distance + compass direction
+```
 
 ## Hardware
 
-| Part | Notes |
-|---|---|
-| ESP32-WROOM-32 DevKit (USB-C) | Any common dev board works |
-| P4 64×32 HUB75 RGB LED Matrix | 256×128 mm, SMD2121, 1/32 scan |
-| 5 V 4 A power supply | Feed the panel directly, **not** through the ESP32 |
-| F-F dupont jumper wires | To wire the panel's HUB75 header to the ESP32 |
+| Qty | Part | Notes |
+|-----|------|-------|
+| 1 | ESP32-WROOM-32 DevKit (USB-C) | 38-pin variant recommended |
+| 1 | P4 64x32 HUB75 RGB LED Matrix Panel | 256x128 mm, SMD2121, 1/32 scan |
+| 1 | 5V 4A power supply (USB output) | For the panel — do NOT power it through the ESP32 |
+| ~16 | F-F dupont jumper wires | Or use an ESP32 screw terminal adapter board |
+| 1 | USB-C cable | For flashing the ESP32 |
 
-See [docs/hardware.md](docs/hardware.md) for the full wiring diagram and pin map.
+## Wiring
+
+### HUB75 panel to ESP32
+
+Connect the panel's **DATA_IN** header (not DATA_OUT) to the ESP32. Pin 1 on the header is marked with an arrow or dot.
+
+```
+Pin 1  (R1)  *  o  Pin 2  (G1)
+Pin 3  (B1)  o  o  Pin 4  (GND)
+Pin 5  (R2)  o  o  Pin 6  (G2)
+Pin 7  (B2)  o  o  Pin 8  (GND)
+Pin 9  (A)   o  o  Pin 10 (B)
+Pin 11 (C)   o  o  Pin 12 (D)
+Pin 13 (CLK) o  o  Pin 14 (LAT)
+Pin 15 (OE)  o  o  Pin 16 (E)
+```
+
+| HUB75 Pin | ESP32 GPIO |
+|-----------|-----------|
+| R1 | 25 |
+| G1 | 26 |
+| B1 | 27 |
+| R2 | 14 |
+| G2 | 12 |
+| B2 | 13 |
+| A | 23 |
+| B | 19 |
+| C | 5 |
+| D | 21 |
+| E | 18 |
+| LAT | 4 |
+| OE | 15 |
+| CLK | 22 |
+| GND (pin 4, 8) | GND |
+
+### Power
+
+- **Panel**: Connect the 5V power supply to the panel's VCC/GND connector (white plug in the center of the PCB).
+- **ESP32**: Power via USB-C (from your computer for flashing, or from the same 5V power supply for standalone operation).
+- **Common ground**: Connect the power supply GND to the ESP32 GND — this is essential for the HUB75 data lines to work.
+
+> **Never power the panel from the ESP32's 5V pin.** A 64x32 panel at full white draws 2-3A, well beyond what USB can deliver.
+
+### Standalone operation
+
+Once flashed, the ESP32 stores WiFi credentials and location in non-volatile storage. You can disconnect it from your computer and power it with any USB-C power source. It will boot, connect to WiFi, and start tracking flights automatically.
 
 ## Software stack
 
 - **PlatformIO** (Arduino framework for ESP32)
-- [`ESP32-HUB75-MatrixPanel-DMA`](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) — panel driver
-- [`ArduinoJson`](https://arduinojson.org/) — streaming JSON parser
-- [`WiFiManager`](https://github.com/tzapu/WiFiManager) — captive-portal setup
+- [ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) — panel driver
+- [ArduinoJson](https://arduinojson.org/) — JSON parser
+- [WiFiManager](https://github.com/tzapu/WiFiManager) — captive portal for first-time setup
 
-See [docs/architecture.md](docs/architecture.md) for the runtime design and [docs/development.md](docs/development.md) for the dev workflow (Wokwi simulator, CLI debugging, gotchas).
+### Data sources
+
+| Data | Source | Auth |
+|------|--------|------|
+| Live aircraft positions | [OpenSky Network API](https://opensky-network.org/api/states/all) | None (free) |
+| Flight routes (origin/destination) | [adsbdb.com](https://api.adsbdb.com/v0/callsign/) | None (free) |
+| Aircraft type codes | [OpenSky Metadata API](https://opensky-network.org/api/metadata/aircraft/icao/) | None (free) |
 
 ## Getting started
 
-### Install PlatformIO
+### 1. Install PlatformIO
 
 ```bash
-brew install platformio        # macOS (recommended)
+brew install platformio        # macOS
 # or: pipx install platformio
 ```
 
-### Build envs
-
-The project ships with three PlatformIO envs so you can develop without hardware:
-
-| Env | Purpose | Command |
-|---|---|---|
-| `esp32dev` | Real hardware target | `pio run -e esp32dev` |
-| `wokwi` | Same firmware, run in the [Wokwi](https://wokwi.com) simulator | `pio run -e wokwi` |
-| `native` | Host-side unit tests (no Arduino runtime) | `pio test -e native` |
-
-### Run in the Wokwi simulator (no hardware needed)
-
-1. Install the **Wokwi for VS Code** extension (`wokwi.wokwi-vscode`).
-2. Activate your Wokwi license: `Ctrl+Shift+P` → `Wokwi: Request a new License`.
-3. Build the firmware: `pio run -e wokwi`.
-4. Open `diagram.json` and click **Start Simulation** in the Wokwi panel — or `Ctrl+Shift+P` → `Wokwi: Start Simulator`.
-5. The simulator picks up `wokwi.toml`, which points at `.pio/build/wokwi/firmware.{bin,elf}`.
-
-The Wokwi env builds with `-DFLYBY_WOKWI=1` and pre-fills WiFi creds for the magic `Wokwi-GUEST` network so the simulator connects to the real internet automatically.
-
-### Flash real hardware (when it arrives)
+### 2. Flash the firmware
 
 ```bash
-pio run -e esp32dev -t upload && pio device monitor
+pio run -e esp32dev -t upload
 ```
 
-On first boot the device exposes a WiFi AP called `FlyBy-Setup`. Connect to it, and the captive portal will prompt for WiFi credentials, your latitude/longitude, and search radius (km).
+### 3. Configure via captive portal
 
-Default test location is **Hamburg, Germany**.
+On first boot, the ESP32 creates a WiFi network called **FlyBy-Setup**. Connect to it from your phone and enter:
 
-### Run host-side unit tests
+- Your home WiFi SSID and password
+- Your latitude and longitude (right-click your location in Google Maps to copy)
+- Search radius in km (default: 50)
+
+The ESP32 saves this config and uses it on every subsequent boot.
+
+### 4. Reset configuration
+
+Hold the **BOOT** button while pressing **EN** (reset) to erase saved config and re-enter the captive portal.
+
+## Display
+
+Three lines, all centered, using the built-in 5x7 Adafruit GFX font:
+
+| Line | Content | Color |
+|------|---------|-------|
+| 1 | Airline name (or callsign if unknown) | Airline brand color |
+| 2 | Route: origin > destination | White |
+| 3 | Distance + compass direction | Green (<5km), Yellow (<20km), Blue (>=20km) |
+
+The compass direction uses German abbreviations: N, NO, O, SO, S, SW, W, NW.
+
+## Development
+
+### Build environments
+
+| Env | Purpose | Command |
+|-----|---------|---------|
+| `esp32dev` | Real hardware | `pio run -e esp32dev` |
+| `wokwi` | Wokwi simulator | `pio run -e wokwi` |
+| `native` | Host-side unit tests | `pio test -e native` |
+
+### Run unit tests
 
 ```bash
 pio test -e native
 ```
 
-Pure-C++ logic (haversine, bbox, layout, airline lookup) gets unit-tested on your laptop without ever touching the ESP32 toolchain — fast iteration loop while the firmware build is the slow path.
+Pure C++ logic (haversine, bounding box, layout formatting, airline lookup, ADS-B parsing) is tested on your laptop without the ESP32 toolchain.
 
-## Display layout
+### Wokwi simulator
+
+1. Install the **Wokwi for VS Code** extension.
+2. Activate your Wokwi license.
+3. Build: `pio run -e wokwi`
+4. Open `diagram.json` and click **Start Simulation**.
+
+The Wokwi env connects to the `Wokwi-GUEST` network automatically.
+
+### Source layout
 
 ```
-+----------------------------------------+
-| Lufthansa                    <- line 1 | airline name, brand RGB
-| DLH441 FRA->JFK A333         <- line 2 | flight # + route + type
-| FL380  465kt  3.1 km         <- line 3 | altitude + speed + distance
-+----------------------------------------+
+src/
+  main.cpp           Entrypoint (delegates to app.h)
+  app.cpp/h          State machine: BOOT > CONNECTING > RUNNING
+  display.cpp/h      HUB75 panel driver wrapper
+  render.cpp/h       Draws frames to the display
+  layout.cpp/h       Composes 3-line frames from plane data
+  adsb_fetch.cpp/h   HTTPS client for OpenSky API
+  adsb_parse.cpp/h   JSON parser for OpenSky state vectors
+  adsb_types.h       Plane struct (shared between parser and renderer)
+  route_lookup.cpp/h Route enrichment via adsbdb.com
+  aircraft_type.cpp/h Aircraft type lookup via OpenSky metadata
+  airlines.cpp/h     ICAO airline code > name + brand color table
+  geo.cpp/h          Haversine distance, bounding box, bearing
+  config.cpp/h       WiFi captive portal + NVS persistence
 ```
 
-Lines that exceed the 64 px width scroll horizontally.
+## Troubleshooting
+
+- **Ghosting / wrong colors**: Check that R1/G1/B1 and R2/G2/B2 are not swapped.
+- **Dim top or bottom half**: The E address line (GPIO 18) is not connected. 1/32 scan panels need all 5 address lines.
+- **Flickering pixels**: Reduce brightness in `display.cpp` or use shorter jumper wires.
+- **"no planes" but aircraft are nearby**: Check WiFi connection. The ESP32 needs internet access to query the OpenSky API. Try resetting with the EN button.
+- **ESP32 brownouts / resets**: Never share 5V between panel and ESP32 via thin jumpers. Use separate power paths.
 
 ## Project tracking
 

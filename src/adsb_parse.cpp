@@ -61,7 +61,8 @@ constexpr int kIdxBaroAlt   = 7;
 constexpr int kIdxOnGround  = 8;
 constexpr int kIdxVelocity  = 9;
 constexpr int kIdxTrueTrack = 10;
-constexpr size_t kMinStateLen = 11;  // we don't read past index 10
+constexpr int kIdxVertRate  = 11;
+constexpr size_t kMinStateLen = 12;
 
 }  // namespace
 
@@ -117,7 +118,11 @@ bool parse_states_find_nearest(const char* json,
                        ? NAN
                        : state[kIdxTrueTrack].as<float>();
     best.on_ground = false;
+    best.vrate_mps = state[kIdxVertRate].isNull()
+                         ? NAN
+                         : state[kIdxVertRate].as<float>();
     best.distance_km = static_cast<float>(dist);
+    best.bearing_deg = static_cast<float>(geo::bearing_deg(obs_lat, obs_lon, lat, lon));
     found = true;
   }
 
