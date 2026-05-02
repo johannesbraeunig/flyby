@@ -14,14 +14,28 @@ void enrich(adsb::Plane*) {}
 #include <WiFiClientSecure.h>
 #include <string.h>
 
+#include "geo.h"
+
 namespace route_lookup {
 namespace {
 
-constexpr size_t kMaxResponseBytes = 16 * 1024;
+constexpr size_t kMaxRouteBytes = 16 * 1024;
+constexpr size_t kMaxTrackBytes = 8 * 1024;
+constexpr double kMismatchKm = 150.0;
+constexpr int kTrackShortSec = 3600;
 
-char cached_callsign[9] = {};
-char cached_origin[5] = {};
-char cached_destination[5] = {};
+struct RouteCache {
+  char callsign[9];
+  char origin[5];
+  char destination[5];
+  double origin_lat;
+  double origin_lon;
+  double dest_lat;
+  double dest_lon;
+  bool verified;
+};
+
+RouteCache cache = {};
 
 void copy_into(char* dst, size_t dst_size, const char* src) {
   if (!dst || dst_size == 0) return;
@@ -31,32 +45,21 @@ void copy_into(char* dst, size_t dst_size, const char* src) {
   dst[i] = 0;
 }
 
-}  // namespace
+double json_double(JsonVariant v, double fallback) {
+  if (v.isNull()) return fallback;
+  return v.as<double>();
+}
 
-void enrich(adsb::Plane* plane) {
-  if (!plane || plane->callsign[0] == 0) return;
-
-  // Return cached result if same callsign.
-  if (strcmp(plane->callsign, cached_callsign) == 0) {
-    copy_into(plane->origin, sizeof(plane->origin), cached_origin);
-    copy_into(plane->destination, sizeof(plane->destination), cached_destination);
-    return;
-  }
-
+bool fetch_route(const char* callsign, RouteCache* out) {
   char url[128];
-  snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/callsign/%s",
-           plane->callsign);
+  snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/callsign/%s", callsign);
   Serial.print(F("Route GET "));
   Serial.println(url);
 
   WiFiClientSecure client;
   client.setInsecure();
-
   HTTPClient http;
-  if (!http.begin(client, url)) {
-    Serial.println(F("Route: http.begin failed"));
-    return;
-  }
+  if (!http.begin(client, url)) return false;
   http.setConnectTimeout(5000);
   http.setTimeout(10000);
 
@@ -64,51 +67,137 @@ void enrich(adsb::Plane* plane) {
   if (code != 200) {
     Serial.printf("Route: HTTP %d\n", code);
     http.end();
-    // Cache as empty so we don't re-ask.
-    copy_into(cached_callsign, sizeof(cached_callsign), plane->callsign);
-    cached_origin[0] = 0;
-    cached_destination[0] = 0;
-    return;
+    return false;
   }
 
   String body = http.getString();
   http.end();
-
-  if (body.length() == 0 || body.length() > kMaxResponseBytes) {
-    Serial.printf("Route: bad body len %u\n", body.length());
-    return;
-  }
+  if (body.length() == 0 || body.length() > kMaxRouteBytes) return false;
 
   JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, body);
-  if (err) {
-    Serial.print(F("Route: JSON parse error: "));
-    Serial.println(err.c_str());
+  if (deserializeJson(doc, body)) return false;
+
+  JsonVariant fr = doc["response"]["flightroute"];
+  const char* oIata = fr["origin"]["iata_code"];
+  const char* dIata = fr["destination"]["iata_code"];
+  if (!oIata || !dIata) return false;
+
+  copy_into(out->origin, sizeof(out->origin), oIata);
+  copy_into(out->destination, sizeof(out->destination), dIata);
+  out->origin_lat = json_double(fr["origin"]["latitude"], NAN);
+  out->origin_lon = json_double(fr["origin"]["longitude"], NAN);
+  out->dest_lat   = json_double(fr["destination"]["latitude"], NAN);
+  out->dest_lon   = json_double(fr["destination"]["longitude"], NAN);
+
+  Serial.printf("Route: %s -> %s (%.2f,%.2f -> %.2f,%.2f)\n",
+                out->origin, out->destination,
+                out->origin_lat, out->origin_lon,
+                out->dest_lat, out->dest_lon);
+  return true;
+}
+
+// Returns true if route should be trusted.
+bool verify_route(const RouteCache* route, const char* icao24) {
+  if (isnan(route->origin_lat) || isnan(route->origin_lon)) return true;
+
+  char url[128];
+  snprintf(url, sizeof(url),
+           "https://opensky-network.org/api/tracks/all?icao24=%s&time=0",
+           icao24);
+  Serial.print(F("Track GET "));
+  Serial.println(url);
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  if (!http.begin(client, url)) return true;
+  http.setConnectTimeout(5000);
+  http.setTimeout(10000);
+
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("Track: HTTP %d\n", code);
+    http.end();
+    return true;
+  }
+
+  String body = http.getString();
+  http.end();
+  if (body.length() == 0 || body.length() > kMaxTrackBytes) return true;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, body)) return true;
+
+  double startTime = doc["startTime"].as<double>();
+  JsonArray path = doc["path"].as<JsonArray>();
+  if (path.isNull() || path.size() == 0) return true;
+
+  JsonArray first = path[0].as<JsonArray>();
+  if (first.isNull() || first.size() < 3) return true;
+
+  double trackLat = first[1].as<double>();
+  double trackLon = first[2].as<double>();
+
+  double originDist = geo::haversine_km(
+      route->origin_lat, route->origin_lon, trackLat, trackLon);
+  Serial.printf("Track verify: start=(%.2f,%.2f) origin_dist=%.0fkm\n",
+                trackLat, trackLon, originDist);
+
+  if (originDist <= kMismatchKm) return true;
+
+  // Escape hatch 1: track start near destination (coverage gap).
+  if (!isnan(route->dest_lat) && !isnan(route->dest_lon)) {
+    double destDist = geo::haversine_km(
+        route->dest_lat, route->dest_lon, trackLat, trackLon);
+    if (destDist <= kMismatchKm) return true;
+  }
+
+  // Escape hatch 2: long-running track (>1hr) — first waypoint is stale.
+  double nowSec = millis() / 1000.0;
+  double trackAgeSec = nowSec;  // approximate — we don't have wall clock
+  // Use startTime from OpenSky (Unix epoch seconds).
+  // We can't compare to wall clock easily, so use endTime - startTime.
+  double endTime = doc["endTime"].as<double>();
+  if (endTime > startTime) {
+    trackAgeSec = endTime - startTime;
+  }
+  if (trackAgeSec > kTrackShortSec) return true;
+
+  Serial.println(F("Track verify: MISMATCH — dropping route"));
+  return false;
+}
+
+}  // namespace
+
+void enrich(adsb::Plane* plane) {
+  if (!plane || plane->callsign[0] == 0) return;
+
+  // Return cached result if same callsign.
+  if (strcmp(plane->callsign, cache.callsign) == 0 && cache.verified) {
+    copy_into(plane->origin, sizeof(plane->origin), cache.origin);
+    copy_into(plane->destination, sizeof(plane->destination), cache.destination);
     return;
   }
 
-  const char* oIata = doc["response"]["flightroute"]["origin"]["iata_code"];
-  const char* dIata = doc["response"]["flightroute"]["destination"]["iata_code"];
-  Serial.printf("Route parsed: origin=%s dest=%s\n",
-                oIata ? oIata : "(null)", dIata ? dIata : "(null)");
+  copy_into(cache.callsign, sizeof(cache.callsign), plane->callsign);
+  cache.origin[0] = 0;
+  cache.destination[0] = 0;
+  cache.verified = false;
 
-  copy_into(cached_callsign, sizeof(cached_callsign), plane->callsign);
-
-  if (oIata) {
-    copy_into(cached_origin, sizeof(cached_origin), oIata);
-    copy_into(plane->origin, sizeof(plane->origin), oIata);
-  } else {
-    cached_origin[0] = 0;
+  if (!fetch_route(plane->callsign, &cache)) {
+    cache.verified = true;
+    return;
   }
 
-  if (dIata) {
-    copy_into(cached_destination, sizeof(cached_destination), dIata);
-    copy_into(plane->destination, sizeof(plane->destination), dIata);
-  } else {
-    cached_destination[0] = 0;
+  // Cross-check against actual ADS-B track.
+  if (!verify_route(&cache, plane->icao24)) {
+    cache.origin[0] = 0;
+    cache.destination[0] = 0;
   }
 
-  Serial.printf("Route: %s -> %s\n", plane->origin, plane->destination);
+  cache.verified = true;
+  copy_into(plane->origin, sizeof(plane->origin), cache.origin);
+  copy_into(plane->destination, sizeof(plane->destination), cache.destination);
 }
 
 }  // namespace route_lookup

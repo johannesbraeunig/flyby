@@ -77,8 +77,27 @@ bool run_portal(Settings* out) {
   WiFiManagerParameter p_lon("lon", "Longitude", lon_buf, 15);
   WiFiManagerParameter p_rad("radius", "Radius (km)", rad_buf, 7);
 
+  const char* locate_btn =
+      "<br><button type='button' onclick=\""
+      "if(!navigator.geolocation){alert('Geolocation not supported');return;}"
+      "this.innerText='Locating...';"
+      "navigator.geolocation.getCurrentPosition("
+      "function(p){"
+      "document.getElementById('lat').value=p.coords.latitude.toFixed(4);"
+      "document.getElementById('lon').value=p.coords.longitude.toFixed(4);"
+      "document.querySelector('[type=button]').innerText='Located!';"
+      "},"
+      "function(e){alert('Location error: '+e.message);"
+      "document.querySelector('[type=button]').innerText='Locate me';},"
+      "{enableHighAccuracy:true,timeout:10000});"
+      "\" style='width:100%;padding:10px;margin-top:5px;font-size:16px;"
+      "background:#07f;color:#fff;border:none;border-radius:4px;cursor:pointer'>"
+      "Locate me</button><br>";
+  WiFiManagerParameter p_locate(locate_btn);
+
   wm.addParameter(&p_lat);
   wm.addParameter(&p_lon);
+  wm.addParameter(&p_locate);
   wm.addParameter(&p_rad);
 
   bool connected = wm.startConfigPortal("FlyBy-Setup");
