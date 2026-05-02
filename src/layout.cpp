@@ -47,12 +47,13 @@ void compose(const adsb::Plane& plane,
     out->l1_r = 255; out->l1_g = 255; out->l1_b = 255;
   }
 
-  // Line 2: route.
+  // Line 2: route, or callsign as fallback.
   if (plane.origin[0] && plane.destination[0]) {
     std::snprintf(out->line2, sizeof(out->line2), "%s > %s",
                   plane.origin, plane.destination);
   } else {
-    out->line2[0] = 0;
+    copy_into(out->line2, sizeof(out->line2),
+              plane.callsign[0] ? plane.callsign : "");
   }
   out->l2_r = 200; out->l2_g = 200; out->l2_b = 200;
 
