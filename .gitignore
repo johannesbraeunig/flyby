@@ -9,4 +9,5 @@ compile_commands.json
 *.hex
 .DS_Store
 .cache/
+.clangd
 .claude/worktrees/

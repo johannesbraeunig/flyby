@@ -190,4 +190,4 @@ beans show flyby-56fy     # the epic
 
 ## License
 
-TBD.
+[MIT](LICENSE)
