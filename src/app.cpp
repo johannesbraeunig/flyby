@@ -101,7 +101,9 @@ void tick_running() {
   last_fetch_ms = now;
 
   adsb::Plane plane;
-  if (adsb::fetch_nearest(cfg.lat, cfg.lon, cfg.radius_km, &plane)) {
+  if (adsb::fetch_nearest(cfg.lat, cfg.lon, cfg.radius_km,
+                          cfg.opensky_client_id, cfg.opensky_client_secret,
+                          &plane)) {
     route_lookup::enrich(&plane);
     aircraft_type::enrich(&plane);
     log_plane(plane);
@@ -154,6 +156,8 @@ void setup() {
       cfg.lat       = 53.5511;
       cfg.lon       = 9.9937;
       cfg.radius_km = 50.0;
+      cfg.opensky_client_id[0] = 0;
+      cfg.opensky_client_secret[0] = 0;
     }
   }
 

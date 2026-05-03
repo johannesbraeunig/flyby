@@ -8,6 +8,8 @@ struct Settings {
   double lat;
   double lon;
   double radius_km;
+  char opensky_client_id[65];
+  char opensky_client_secret[65];
 };
 
 // Load settings from NVS. Returns true if valid settings exist.

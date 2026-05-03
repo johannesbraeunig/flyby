@@ -16,6 +16,8 @@ constexpr const char* kKeyPass      = "pass";
 constexpr const char* kKeyLat       = "lat";
 constexpr const char* kKeyLon       = "lon";
 constexpr const char* kKeyRadius    = "radius";
+constexpr const char* kKeyOskyId    = "osky_id";
+constexpr const char* kKeyOskySec   = "osky_sec";
 
 constexpr double kDefaultLat    = 53.5511;
 constexpr double kDefaultLon    = 9.9937;
@@ -39,6 +41,12 @@ bool load(Settings* out) {
     out->lat       = prefs.getDouble(kKeyLat, kDefaultLat);
     out->lon       = prefs.getDouble(kKeyLon, kDefaultLon);
     out->radius_km = prefs.getDouble(kKeyRadius, kDefaultRadius);
+    String oid = prefs.getString(kKeyOskyId, "");
+    String osec = prefs.getString(kKeyOskySec, "");
+    strncpy(out->opensky_client_id, oid.c_str(), sizeof(out->opensky_client_id) - 1);
+    out->opensky_client_id[sizeof(out->opensky_client_id) - 1] = 0;
+    strncpy(out->opensky_client_secret, osec.c_str(), sizeof(out->opensky_client_secret) - 1);
+    out->opensky_client_secret[sizeof(out->opensky_client_secret) - 1] = 0;
   }
   prefs.end();
   return valid;
@@ -51,6 +59,8 @@ void save(const Settings& s) {
   prefs.putDouble(kKeyLat, s.lat);
   prefs.putDouble(kKeyLon, s.lon);
   prefs.putDouble(kKeyRadius, s.radius_km);
+  prefs.putString(kKeyOskyId, s.opensky_client_id);
+  prefs.putString(kKeyOskySec, s.opensky_client_secret);
   prefs.putBool(kKeyValid, true);
   prefs.end();
 }
@@ -95,10 +105,18 @@ bool run_portal(Settings* out) {
       "Locate me</button><br>";
   WiFiManagerParameter p_locate(locate_btn);
 
+  WiFiManagerParameter p_osky_hdr(
+      "<br><hr><p style='font-weight:bold'>OpenSky API (optional)</p>");
+  WiFiManagerParameter p_osky_id("osky_id", "Client ID", "", 64);
+  WiFiManagerParameter p_osky_sec("osky_sec", "Client Secret", "", 64);
+
   wm.addParameter(&p_lat);
   wm.addParameter(&p_lon);
   wm.addParameter(&p_locate);
   wm.addParameter(&p_rad);
+  wm.addParameter(&p_osky_hdr);
+  wm.addParameter(&p_osky_id);
+  wm.addParameter(&p_osky_sec);
 
   bool connected = wm.startConfigPortal("FlyBy-Setup");
   if (!connected) return false;
@@ -114,6 +132,13 @@ bool run_portal(Settings* out) {
 
   if (out->radius_km < 1.0)   out->radius_km = 1.0;
   if (out->radius_km > 500.0) out->radius_km = 500.0;
+
+  strncpy(out->opensky_client_id, p_osky_id.getValue(),
+          sizeof(out->opensky_client_id) - 1);
+  out->opensky_client_id[sizeof(out->opensky_client_id) - 1] = 0;
+  strncpy(out->opensky_client_secret, p_osky_sec.getValue(),
+          sizeof(out->opensky_client_secret) - 1);
+  out->opensky_client_secret[sizeof(out->opensky_client_secret) - 1] = 0;
 
   save(*out);
   return true;
