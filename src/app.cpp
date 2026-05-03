@@ -209,6 +209,11 @@ void loop() {
   const uint32_t now = millis();
   if (now - last_render_ms >= kRenderIntervalMs) {
     last_render_ms = now;
+    if (!current_frame.is_idle) {
+      uint32_t elapsed = now - last_fetch_ms;
+      current_frame.progress =
+          static_cast<float>(elapsed) / static_cast<float>(kFetchIntervalMs);
+    }
     render::draw_frame(current_frame, now);
   }
 

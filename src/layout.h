@@ -17,10 +17,10 @@ constexpr int kPanelHeight = 32;
 constexpr int kCharWidth  = 6;
 constexpr int kCharHeight = 8;
 
-// 3 lines × 8px = 24px, centered in 32px.
-constexpr int kLine1Y = 1;
-constexpr int kLine2Y = 12;
-constexpr int kLine3Y = 23;
+// Progress bar at Y=0, then 3 lines × 8px = 24px in remaining 31px.
+constexpr int kLine1Y = 2;
+constexpr int kLine2Y = 13;
+constexpr int kLine3Y = 24;
 
 // Distance color thresholds.
 constexpr float kDistGreenKm  = 5.0f;
@@ -42,6 +42,7 @@ struct Frame {
   uint8_t l3_r, l3_g, l3_b;
 
   bool is_idle;
+  float progress;  // 0.0 (just fetched) → 1.0 (about to fetch)
 };
 
 void compose(const adsb::Plane& plane,
