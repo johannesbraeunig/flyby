@@ -60,7 +60,7 @@ void test_compose_with_unknown_airline(void) {
   layout::Frame f;
   layout::compose(p, nullptr, &f);
 
-  TEST_ASSERT_EQUAL_STRING("ZZZ999", f.line1);
+  TEST_ASSERT_EQUAL_STRING("ZZZ", f.line1);
   TEST_ASSERT_EQUAL_UINT8(255, f.l1_r);
 }
 

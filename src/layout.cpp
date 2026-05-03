@@ -37,13 +37,18 @@ void compose(const adsb::Plane& plane,
              Frame* out) {
   if (!out) return;
 
-  // Line 1: airline name in brand color, or callsign if unknown.
+  // Line 1: airline name in brand color, or 3-letter ICAO prefix as fallback.
   if (airline) {
     copy_into(out->line1, sizeof(out->line1), airline->name);
     out->l1_r = airline->r; out->l1_g = airline->g; out->l1_b = airline->b;
+  } else if (plane.callsign[0] && plane.callsign[1] && plane.callsign[2]) {
+    out->line1[0] = plane.callsign[0];
+    out->line1[1] = plane.callsign[1];
+    out->line1[2] = plane.callsign[2];
+    out->line1[3] = 0;
+    out->l1_r = 255; out->l1_g = 255; out->l1_b = 255;
   } else {
-    copy_into(out->line1, sizeof(out->line1),
-              plane.callsign[0] ? plane.callsign : "----");
+    copy_into(out->line1, sizeof(out->line1), "----");
     out->l1_r = 255; out->l1_g = 255; out->l1_b = 255;
   }
 
@@ -57,13 +62,13 @@ void compose(const adsb::Plane& plane,
   }
   out->l2_r = 200; out->l2_g = 200; out->l2_b = 200;
 
-  // Line 3: distance + direction.
+  // Line 3: direction + distance.
   char km[8];
   format_distance_km(plane.distance_km, km, sizeof(km));
 
   if (!std::isnan(plane.bearing_deg)) {
     const char* dir = geo::bearing_to_compass(plane.bearing_deg);
-    std::snprintf(out->line3, sizeof(out->line3), "%s %s", km, dir);
+    std::snprintf(out->line3, sizeof(out->line3), "%s %s", dir, km);
   } else {
     copy_into(out->line3, sizeof(out->line3), km);
   }

@@ -64,6 +64,26 @@ constexpr int kIdxTrueTrack = 10;
 constexpr int kIdxVertRate  = 11;
 constexpr size_t kMinStateLen = 12;
 
+const char* const kBlockedPrefixes[] = {
+    "CHX",
+    "EFD",  // German Air Force
+};
+constexpr size_t kBlockedCount = sizeof(kBlockedPrefixes) / sizeof(kBlockedPrefixes[0]);
+
+bool is_commercial_callsign(const char* cs) {
+  if (!cs || cs[0] == 0) return false;
+  if (cs[0] < 'A' || cs[0] > 'Z') return false;
+  if (cs[1] < 'A' || cs[1] > 'Z') return false;
+  if (cs[2] < 'A' || cs[2] > 'Z') return false;
+  if (cs[3] < '0' || cs[3] > '9') return false;
+  for (size_t i = 0; i < kBlockedCount; ++i) {
+    if (cs[0] == kBlockedPrefixes[i][0] &&
+        cs[1] == kBlockedPrefixes[i][1] &&
+        cs[2] == kBlockedPrefixes[i][2]) return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 bool parse_states_find_nearest(const char* json,
@@ -91,6 +111,14 @@ bool parse_states_find_nearest(const char* json,
     if (state.size() < kMinStateLen) continue;
     if (state[kIdxOnGround].as<bool>()) continue;
     if (state[kIdxLat].isNull() || state[kIdxLon].isNull()) continue;
+
+    const char* cs_raw = state[kIdxCallsign].as<const char*>();
+    char cs_buf[9] = {};
+    if (cs_raw) {
+      copy_into(cs_buf, sizeof(cs_buf), cs_raw);
+      rtrim_spaces(cs_buf);
+    }
+    if (!is_commercial_callsign(cs_buf)) continue;
 
     const double lat = state[kIdxLat].as<double>();
     const double lon = state[kIdxLon].as<double>();
