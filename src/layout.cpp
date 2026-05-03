@@ -86,11 +86,11 @@ void compose(const adsb::Plane& plane,
 
 void compose_idle(Frame* out) {
   if (!out) return;
-  copy_into(out->line1, sizeof(out->line1), "FlyBy");
-  out->l1_r = 0; out->l1_g = 200; out->l1_b = 255;
+  copy_into(out->line1, sizeof(out->line1), "No Plane");
+  out->l1_r = 255; out->l1_g = 220; out->l1_b = 0;
 
-  copy_into(out->line2, sizeof(out->line2), "scanning");
-  out->l2_r = 100; out->l2_g = 100; out->l2_b = 100;
+  out->line2[0] = 0;
+  out->l2_r = 0; out->l2_g = 0; out->l2_b = 0;
 
   out->line3[0] = 0;
   out->l3_r = 0; out->l3_g = 0; out->l3_b = 0;

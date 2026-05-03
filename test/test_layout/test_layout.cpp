@@ -84,7 +84,7 @@ void test_compose_with_route(void) {
 void test_compose_idle(void) {
   layout::Frame f;
   layout::compose_idle(&f);
-  TEST_ASSERT_EQUAL_STRING("FlyBy", f.line1);
+  TEST_ASSERT_EQUAL_STRING("No Plane", f.line1);
   TEST_ASSERT_TRUE(f.is_idle);
 }
 
