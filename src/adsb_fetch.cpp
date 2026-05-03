@@ -48,8 +48,10 @@ constexpr const char* kTokenUrl =
 
 constexpr unsigned long kTokenSafetyMarginMs = 60UL * 1000;
 
-char     cached_token[1024] = {};
+char     cached_token[2048] = {};
 uint32_t token_expires_at   = 0;
+uint32_t token_retry_after  = 0;
+constexpr uint32_t kTokenRetryCooldownMs = 5UL * 60 * 1000;
 
 bool has_credentials(const char* id, const char* secret) {
   return id && id[0] && secret && secret[0];
@@ -66,8 +68,8 @@ bool fetch_token(const char* client_id, const char* client_secret) {
     Serial.println(F("OAuth2: http.begin failed"));
     return false;
   }
-  http.setConnectTimeout(10000);
-  http.setTimeout(15000);
+  http.setConnectTimeout(5000);
+  http.setTimeout(5000);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
   char body[256];
@@ -109,19 +111,27 @@ bool fetch_token(const char* client_id, const char* client_secret) {
   token_expires_at = millis() +
       static_cast<uint32_t>(expires_in) * 1000 - kTokenSafetyMarginMs;
 
-  Serial.printf("OAuth2: token acquired, expires in %ds\n", expires_in);
+  Serial.printf("OAuth2: token acquired (%d bytes), expires in %ds\n",
+                strlen(cached_token), expires_in);
   return true;
 }
 
 bool ensure_token(const char* client_id, const char* client_secret) {
   if (!has_credentials(client_id, client_secret)) return false;
   if (cached_token[0] && millis() < token_expires_at) return true;
-  return fetch_token(client_id, client_secret);
+  if (millis() < token_retry_after) return false;
+  bool ok = fetch_token(client_id, client_secret);
+  if (!ok) {
+    token_retry_after = millis() + kTokenRetryCooldownMs;
+    Serial.println(F("OAuth2: will retry in 5 min"));
+  }
+  return ok;
 }
 
 void invalidate_token() {
   cached_token[0] = 0;
   token_expires_at = 0;
+  token_retry_after = 0;
 }
 
 void build_url(char* buf, size_t buf_len, double obs_lat, double obs_lon,
@@ -148,7 +158,7 @@ int do_get(const char* url, const char* client_id, const char* client_secret,
   http.addHeader("Accept", "application/json");
 
   if (ensure_token(client_id, client_secret)) {
-    char auth[1100];
+    char auth[2100];
     snprintf(auth, sizeof(auth), "Bearer %s", cached_token);
     http.addHeader("Authorization", auth);
   }

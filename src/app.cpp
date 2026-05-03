@@ -31,6 +31,10 @@ uint32_t       connect_started   = 0;
 uint32_t       last_render_ms    = 0;
 layout::Frame  current_frame{};
 
+constexpr uint32_t kDoubleClickMs = 500;
+uint32_t       boot_first_press  = 0;
+bool           boot_was_pressed  = false;
+
 void status_frame(const char* line1, const char* line2,
                    uint8_t r, uint8_t g, uint8_t b) {
   layout::compose_idle(&current_frame);
@@ -49,6 +53,31 @@ void status_frame(const char* line1, const char* line2,
   current_frame.l2_r = r;
   current_frame.l2_g = g;
   current_frame.l2_b = b;
+}
+
+void launch_portal() {
+  Serial.println(F("Double-click — launching portal"));
+  WiFi.disconnect(true);
+  status_frame("FlyBy", "Setup AP", 255, 200, 0);
+  render::draw_frame(current_frame, millis());
+
+  if (config::run_portal(&cfg)) {
+    Serial.println(F("Config saved via portal"));
+  }
+  ESP.restart();
+}
+
+void check_boot_button() {
+  bool pressed = (digitalRead(kBootPin) == LOW);
+  if (pressed && !boot_was_pressed) {
+    uint32_t now = millis();
+    if (now - boot_first_press < kDoubleClickMs) {
+      launch_portal();
+      return;
+    }
+    boot_first_press = now;
+  }
+  boot_was_pressed = pressed;
 }
 
 void enter_connecting() {
@@ -174,6 +203,8 @@ void loop() {
     case State::RUNNING:    tick_running(); break;
     case State::ERROR_WIFI: break;
   }
+
+  check_boot_button();
 
   const uint32_t now = millis();
   if (now - last_render_ms >= kRenderIntervalMs) {
