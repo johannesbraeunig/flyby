@@ -87,22 +87,34 @@ bool run_portal(Settings* out) {
   WiFiManagerParameter p_lon("lon", "Longitude", lon_buf, 15);
   WiFiManagerParameter p_rad("radius", "Radius (km)", rad_buf, 7);
 
+  // iOS captive-portal WebView silently blocks inline onclick= attributes,
+  // so the handler is wired up via addEventListener in a <script> block.
   const char* locate_btn =
-      "<br><button type='button' onclick=\""
+      "<br><button type='button' id='flyby-locate-btn' "
+      "style='width:100%;padding:10px;margin-top:5px;font-size:16px;"
+      "background:#07f;color:#fff;border:none;border-radius:4px;cursor:pointer'>"
+      "Locate me</button><br>"
+      "<script>"
+      "(function(){"
+      "var btn=document.getElementById('flyby-locate-btn');"
+      "if(!btn)return;"
+      "btn.addEventListener('click',function(){"
       "if(!navigator.geolocation){alert('Geolocation not supported');return;}"
-      "this.innerText='Locating...';"
+      "btn.innerText='Locating...';"
       "navigator.geolocation.getCurrentPosition("
       "function(p){"
-      "document.getElementById('lat').value=p.coords.latitude.toFixed(4);"
-      "document.getElementById('lon').value=p.coords.longitude.toFixed(4);"
-      "document.querySelector('[type=button]').innerText='Located!';"
+      "var la=document.getElementById('lat');"
+      "var lo=document.getElementById('lon');"
+      "if(la)la.value=p.coords.latitude.toFixed(4);"
+      "if(lo)lo.value=p.coords.longitude.toFixed(4);"
+      "btn.innerText='Located!';"
       "},"
       "function(e){alert('Location error: '+e.message);"
-      "document.querySelector('[type=button]').innerText='Locate me';},"
+      "btn.innerText='Locate me';},"
       "{enableHighAccuracy:true,timeout:10000});"
-      "\" style='width:100%;padding:10px;margin-top:5px;font-size:16px;"
-      "background:#07f;color:#fff;border:none;border-radius:4px;cursor:pointer'>"
-      "Locate me</button><br>";
+      "});"
+      "})();"
+      "</script>";
   WiFiManagerParameter p_locate(locate_btn);
 
   WiFiManagerParameter p_osky_hdr(
