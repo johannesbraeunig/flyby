@@ -12,18 +12,25 @@
 
 namespace adsb {
 
+enum class FetchStatus {
+  Ok,             // *out populated with nearest plane
+  NoPlane,        // 200 OK but no plane found in bbox
+  NetworkError,   // connect/HTTP/TLS failure or non-200/401/429 response
+  AuthError,      // 401 still failing after token refresh
+  RateLimited,    // 429
+};
+
 // Fetch the nearest airborne aircraft to (obs_lat, obs_lon) within
-// `radius_km`. Returns true if a plane was found and *out is populated.
-// Returns false on no result, network error, or stub failure.
+// `radius_km`. On Ok, *out is populated.
 //
 // If client_id and client_secret are non-empty, OAuth2 client credentials
 // are used for authenticated access (higher rate limits). Otherwise
 // falls back to anonymous access.
-bool fetch_nearest(double obs_lat,
-                   double obs_lon,
-                   double radius_km,
-                   const char* client_id,
-                   const char* client_secret,
-                   Plane* out);
+FetchStatus fetch_nearest(double obs_lat,
+                          double obs_lon,
+                          double radius_km,
+                          const char* client_id,
+                          const char* client_secret,
+                          Plane* out);
 
 }  // namespace adsb

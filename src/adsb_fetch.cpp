@@ -6,9 +6,9 @@
 
 namespace adsb {
 
-bool fetch_nearest(double, double, double, const char*, const char*,
-                   Plane* out) {
-  if (!out) return false;
+FetchStatus fetch_nearest(double, double, double, const char*, const char*,
+                          Plane* out) {
+  if (!out) return FetchStatus::NetworkError;
   plane_clear(out);
   strncpy(out->icao24,   "abc123", sizeof(out->icao24)  - 1);
   strncpy(out->callsign, "DLH441", sizeof(out->callsign) - 1);
@@ -19,7 +19,7 @@ bool fetch_nearest(double, double, double, const char*, const char*,
   out->hdg_deg     = 90.0f;
   out->on_ground   = false;
   out->distance_km = 0.4f;
-  return true;
+  return FetchStatus::Ok;
 }
 
 }  // namespace adsb
@@ -187,10 +187,10 @@ int do_get(const char* url, const char* client_id, const char* client_secret,
 
 }  // namespace
 
-bool fetch_nearest(double obs_lat, double obs_lon, double radius_km,
-                   const char* client_id, const char* client_secret,
-                   Plane* out) {
-  if (!out) return false;
+FetchStatus fetch_nearest(double obs_lat, double obs_lon, double radius_km,
+                          const char* client_id, const char* client_secret,
+                          Plane* out) {
+  if (!out) return FetchStatus::NetworkError;
 
   char url[256];
   build_url(url, sizeof(url), obs_lat, obs_lon, radius_km);
@@ -208,27 +208,32 @@ bool fetch_nearest(double obs_lat, double obs_lon, double radius_km,
 
   if (code == 429) {
     Serial.println(F("ADS-B: rate-limited (429), backing off"));
-    return false;
+    return FetchStatus::RateLimited;
+  }
+
+  if (code == 401) {
+    Serial.println(F("ADS-B: 401 after refresh — auth error"));
+    return FetchStatus::AuthError;
   }
 
   if (code != 200) {
     Serial.printf("ADS-B: HTTP %d\n", code);
-    return false;
+    return FetchStatus::NetworkError;
   }
 
   if (body.length() == 0) {
     Serial.println(F("ADS-B: empty response body"));
-    return false;
+    return FetchStatus::NetworkError;
   }
 
   Serial.printf("ADS-B: %u bytes, parsing...\n", body.length());
 
-  bool ok = parse_states_find_nearest(body.c_str(), body.length(), obs_lat,
-                                      obs_lon, out);
-  if (!ok) {
+  if (!parse_states_find_nearest(body.c_str(), body.length(), obs_lat,
+                                 obs_lon, out)) {
     Serial.println(F("ADS-B: no planes found in response"));
+    return FetchStatus::NoPlane;
   }
-  return ok;
+  return FetchStatus::Ok;
 }
 
 }  // namespace adsb

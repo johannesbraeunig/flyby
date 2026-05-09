@@ -125,23 +125,45 @@ void log_plane(const adsb::Plane& p) {
 }
 
 void tick_running() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("WiFi dropped — re-entering CONNECTING"));
+    enter_connecting();
+    return;
+  }
+
   const uint32_t now = millis();
   if (now - last_fetch_ms < kFetchIntervalMs) return;
   last_fetch_ms = now;
 
-  adsb::Plane plane;
-  if (adsb::fetch_nearest(cfg.lat, cfg.lon, cfg.radius_km,
-                          cfg.opensky_client_id, cfg.opensky_client_secret,
-                          &plane)) {
-    route_lookup::enrich(&plane);
-    aircraft_type::enrich(&plane);
-    log_plane(plane);
+  Serial.printf("heap: free=%u maxAlloc=%u\n",
+                ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
-    const auto* airline = airlines::lookup(plane.callsign);
-    layout::compose(plane, airline, &current_frame);
-  } else {
-    Serial.println(F("no planes nearby"));
-    layout::compose_idle(&current_frame);
+  adsb::Plane plane;
+  adsb::FetchStatus status = adsb::fetch_nearest(
+      cfg.lat, cfg.lon, cfg.radius_km,
+      cfg.opensky_client_id, cfg.opensky_client_secret, &plane);
+
+  switch (status) {
+    case adsb::FetchStatus::Ok: {
+      route_lookup::enrich(&plane);
+      aircraft_type::enrich(&plane);
+      log_plane(plane);
+      const auto* airline = airlines::lookup(plane.callsign);
+      layout::compose(plane, airline, &current_frame);
+      break;
+    }
+    case adsb::FetchStatus::NoPlane:
+      layout::compose_idle(&current_frame);
+      break;
+    case adsb::FetchStatus::NetworkError:
+      status_frame("ADS-B", "no net", 255, 50, 50);
+      break;
+    case adsb::FetchStatus::AuthError:
+      status_frame("ADS-B", "no auth", 255, 50, 50);
+      break;
+    case adsb::FetchStatus::RateLimited:
+      status_frame("ADS-B", "rate lim", 255, 200, 0);
+      break;
   }
 }
 
