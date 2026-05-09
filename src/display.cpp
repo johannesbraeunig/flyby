@@ -55,10 +55,6 @@ void drawText(int x, int y, const char* text, uint16_t color) {
   panel->print(text);
 }
 
-void drawPixel(int x, int y, uint16_t color) {
-  if (panel) panel->drawPixel(x, y, color);
-}
-
 void flush() {
 }
 

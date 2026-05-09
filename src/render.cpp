@@ -6,16 +6,6 @@
 namespace render {
 namespace {
 
-void draw_progress_bar(float progress) {
-  if (progress < 0.0f) progress = 0.0f;
-  if (progress > 1.0f) progress = 1.0f;
-  int filled = static_cast<int>((1.0f - progress) * layout::kPanelWidth);
-  uint16_t color = display::rgb(255, 180, 0);
-  for (int x = 0; x < filled; ++x) {
-    display::drawPixel(x, 0, color);
-  }
-}
-
 void draw_line_centered(const char* text, int y, uint8_t r, uint8_t g, uint8_t b) {
   if (!text || text[0] == 0) return;
   int w = layout::text_width_px(text);
@@ -44,7 +34,6 @@ void draw_frame(const layout::Frame& f, uint32_t) {
     return;
   }
 
-  draw_progress_bar(f.progress);
   draw_line_centered(f.line1, layout::kLine1Y, f.l1_r, f.l1_g, f.l1_b);
   draw_line_centered(f.line2, layout::kLine2Y, f.l2_r, f.l2_g, f.l2_b);
   draw_line_centered(f.line3, layout::kLine3Y, f.l3_r, f.l3_g, f.l3_b);
