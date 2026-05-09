@@ -3,7 +3,7 @@
 #ifdef NATIVE_BUILD
 
 namespace route_lookup {
-void enrich(adsb::Plane*) {}
+void enrich(adsb::Plane*, const char*, const char*) {}
 }  // namespace route_lookup
 
 #else
@@ -13,30 +13,24 @@ void enrich(adsb::Plane*) {}
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <string.h>
+#include <time.h>
 
-#include "geo.h"
+#include "adsb_fetch.h"
 
 namespace route_lookup {
 namespace {
 
-constexpr size_t kMaxRouteBytes = 16 * 1024;
-constexpr size_t kMaxTrackBytes = 8 * 1024;
-constexpr double kMismatchKm = 150.0;
-constexpr int kTrackShortSec = 3600;
-// Max acceptable detour: how much longer (origin→plane→dest) can be vs the
-// great-circle origin→dest. Generous to allow descent vectoring and holding;
-// a wildly wrong adsbdb route puts the plane hundreds of km off and is caught.
-constexpr double kMaxDetourKm = 200.0;
+constexpr size_t   kMaxBodyBytes = 8 * 1024;
+constexpr uint32_t kCacheTtlMs   = 5UL * 60 * 1000;       // 5 min
+constexpr long     kLookbackSec  = 24L * 3600;            // 24 h
+constexpr time_t   kMinValidUnix = 1700000000;            // 2023-11
 
 struct RouteCache {
-  char callsign[9];
-  char origin[5];
-  char destination[5];
-  double origin_lat;
-  double origin_lon;
-  double dest_lat;
-  double dest_lon;
-  bool verified;
+  char     icao24[7];          // key (lowercase hex, 6 chars + null)
+  uint32_t cached_at_ms;
+  bool     populated;          // true once we have queried at least once
+  char     origin[5];          // ICAO 4-char + null (may be empty)
+  char     destination[5];
 };
 
 RouteCache cache = {};
@@ -49,179 +43,122 @@ void copy_into(char* dst, size_t dst_size, const char* src) {
   dst[i] = 0;
 }
 
-double json_double(JsonVariant v, double fallback) {
-  if (v.isNull()) return fallback;
-  return v.as<double>();
-}
+// Query OpenSky /api/flights/aircraft for the most recent flight of `icao24`.
+// Returns true if at least one of origin/destination was populated in `out`.
+bool fetch_recent_flight(const char* icao24,
+                         const char* client_id,
+                         const char* client_secret,
+                         RouteCache* out) {
+  time_t now = time(nullptr);
+  if (now < kMinValidUnix) {
+    Serial.println(F("Flight: NTP not synced yet, skipping"));
+    return false;
+  }
+  long begin = static_cast<long>(now) - kLookbackSec;
+  long end   = static_cast<long>(now);
 
-bool fetch_route(const char* callsign, RouteCache* out) {
-  char url[128];
-  snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/callsign/%s", callsign);
-  Serial.print(F("Route GET "));
+  char url[224];
+  snprintf(url, sizeof(url),
+           "https://opensky-network.org/api/flights/aircraft"
+           "?icao24=%s&begin=%ld&end=%ld",
+           icao24, begin, end);
+  Serial.print(F("Flight GET "));
   Serial.println(url);
 
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  if (!http.begin(client, url)) return false;
+  if (!http.begin(client, url)) {
+    Serial.println(F("Flight: http.begin failed"));
+    return false;
+  }
   http.setConnectTimeout(5000);
   http.setTimeout(10000);
+  http.addHeader("Accept", "application/json");
+
+  const char* token = adsb::opensky_token(client_id, client_secret);
+  if (token) {
+    String auth = String("Bearer ") + token;
+    http.addHeader("Authorization", auth);
+  }
 
   int code = http.GET();
   if (code != 200) {
-    Serial.printf("Route: HTTP %d\n", code);
+    Serial.printf("Flight: HTTP %d\n", code);
     http.end();
     return false;
   }
 
   String body = http.getString();
   http.end();
-  if (body.length() == 0 || body.length() > kMaxRouteBytes) return false;
+  if (body.length() == 0 || body.length() > kMaxBodyBytes) {
+    Serial.printf("Flight: bad body length %u\n", body.length());
+    return false;
+  }
 
   JsonDocument doc;
-  if (deserializeJson(doc, body)) return false;
+  if (deserializeJson(doc, body)) {
+    Serial.println(F("Flight: JSON parse failed"));
+    return false;
+  }
 
-  JsonVariant fr = doc["response"]["flightroute"];
-  const char* oIata = fr["origin"]["iata_code"];
-  const char* dIata = fr["destination"]["iata_code"];
-  if (!oIata || !dIata) return false;
+  JsonArray flights = doc.as<JsonArray>();
+  if (flights.isNull() || flights.size() == 0) {
+    Serial.println(F("Flight: no recent flights"));
+    return false;
+  }
 
-  copy_into(out->origin, sizeof(out->origin), oIata);
-  copy_into(out->destination, sizeof(out->destination), dIata);
-  out->origin_lat = json_double(fr["origin"]["latitude"], NAN);
-  out->origin_lon = json_double(fr["origin"]["longitude"], NAN);
-  out->dest_lat   = json_double(fr["destination"]["latitude"], NAN);
-  out->dest_lon   = json_double(fr["destination"]["longitude"], NAN);
-
-  Serial.printf("Route: %s -> %s (%.2f,%.2f -> %.2f,%.2f)\n",
-                out->origin, out->destination,
-                out->origin_lat, out->origin_lon,
-                out->dest_lat, out->dest_lon);
-  return true;
-}
-
-// Returns true if route should be trusted.
-bool verify_route(const RouteCache* route, const adsb::Plane* plane) {
-  if (isnan(route->origin_lat) || isnan(route->origin_lon)) return true;
-
-  // Geometric detour check: if the plane's current position makes the
-  // origin→plane→dest path far longer than origin→dest, the route is wrong.
-  // Cheap, no API call, catches "historical callsign mapping doesn't match
-  // today's flight" — the failure mode the track-based check misses.
-  if (!isnan(route->dest_lat) && !isnan(route->dest_lon)) {
-    double route_km = geo::haversine_km(
-        route->origin_lat, route->origin_lon,
-        route->dest_lat, route->dest_lon);
-    double leg_km = geo::haversine_km(
-        route->origin_lat, route->origin_lon, plane->lat, plane->lon)
-        + geo::haversine_km(
-        plane->lat, plane->lon, route->dest_lat, route->dest_lon);
-    double detour_km = leg_km - route_km;
-    Serial.printf("Detour check: route=%.0fkm leg=%.0fkm detour=%.0fkm\n",
-                  route_km, leg_km, detour_km);
-    if (detour_km > kMaxDetourKm) {
-      Serial.println(F("Detour: too far off-route — dropping"));
-      return false;
+  // Pick most recent flight by max firstSeen.
+  JsonObject best;
+  long best_first_seen = -1;
+  for (JsonObject f : flights) {
+    long fs = f["firstSeen"].as<long>();
+    if (fs > best_first_seen) {
+      best_first_seen = fs;
+      best = f;
     }
   }
+  if (best.isNull()) return false;
 
-  char url[128];
-  snprintf(url, sizeof(url),
-           "https://opensky-network.org/api/tracks/all?icao24=%s&time=0",
-           plane->icao24);
-  Serial.print(F("Track GET "));
-  Serial.println(url);
+  const char* dep = best["estDepartureAirport"].as<const char*>();
+  const char* arr = best["estArrivalAirport"].as<const char*>();
+  copy_into(out->origin,      sizeof(out->origin),      dep);
+  copy_into(out->destination, sizeof(out->destination), arr);
 
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  if (!http.begin(client, url)) return true;
-  http.setConnectTimeout(5000);
-  http.setTimeout(10000);
-
-  int code = http.GET();
-  if (code != 200) {
-    Serial.printf("Track: HTTP %d\n", code);
-    http.end();
-    return true;
-  }
-
-  String body = http.getString();
-  http.end();
-  if (body.length() == 0 || body.length() > kMaxTrackBytes) return true;
-
-  JsonDocument doc;
-  if (deserializeJson(doc, body)) return true;
-
-  double startTime = doc["startTime"].as<double>();
-  JsonArray path = doc["path"].as<JsonArray>();
-  if (path.isNull() || path.size() == 0) return true;
-
-  JsonArray first = path[0].as<JsonArray>();
-  if (first.isNull() || first.size() < 3) return true;
-
-  double trackLat = first[1].as<double>();
-  double trackLon = first[2].as<double>();
-
-  double originDist = geo::haversine_km(
-      route->origin_lat, route->origin_lon, trackLat, trackLon);
-  Serial.printf("Track verify: start=(%.2f,%.2f) origin_dist=%.0fkm\n",
-                trackLat, trackLon, originDist);
-
-  if (originDist <= kMismatchKm) return true;
-
-  // Escape hatch 1: track start near destination (coverage gap).
-  if (!isnan(route->dest_lat) && !isnan(route->dest_lon)) {
-    double destDist = geo::haversine_km(
-        route->dest_lat, route->dest_lon, trackLat, trackLon);
-    if (destDist <= kMismatchKm) return true;
-  }
-
-  // Escape hatch 2: long-running track (>1hr) — first waypoint is stale.
-  double nowSec = millis() / 1000.0;
-  double trackAgeSec = nowSec;  // approximate — we don't have wall clock
-  // Use startTime from OpenSky (Unix epoch seconds).
-  // We can't compare to wall clock easily, so use endTime - startTime.
-  double endTime = doc["endTime"].as<double>();
-  if (endTime > startTime) {
-    trackAgeSec = endTime - startTime;
-  }
-  if (trackAgeSec > kTrackShortSec) return true;
-
-  Serial.println(F("Track verify: MISMATCH — dropping route"));
-  return false;
+  Serial.printf("Flight: %s -> %s\n",
+                out->origin[0]      ? out->origin      : "?",
+                out->destination[0] ? out->destination : "?");
+  return out->origin[0] || out->destination[0];
 }
 
 }  // namespace
 
-void enrich(adsb::Plane* plane) {
-  if (!plane || plane->callsign[0] == 0) return;
+void enrich(adsb::Plane* plane,
+            const char* client_id,
+            const char* client_secret) {
+  if (!plane || plane->icao24[0] == 0) return;
 
-  // Return cached result if same callsign.
-  if (strcmp(plane->callsign, cache.callsign) == 0 && cache.verified) {
-    copy_into(plane->origin, sizeof(plane->origin), cache.origin);
+  uint32_t now_ms = millis();
+
+  // Cache hit (same aircraft, within TTL): reuse.
+  if (cache.populated &&
+      strcmp(plane->icao24, cache.icao24) == 0 &&
+      (now_ms - cache.cached_at_ms) < kCacheTtlMs) {
+    copy_into(plane->origin,      sizeof(plane->origin),      cache.origin);
     copy_into(plane->destination, sizeof(plane->destination), cache.destination);
     return;
   }
 
-  copy_into(cache.callsign, sizeof(cache.callsign), plane->callsign);
-  cache.origin[0] = 0;
+  // Refresh.
+  copy_into(cache.icao24, sizeof(cache.icao24), plane->icao24);
+  cache.origin[0]      = 0;
   cache.destination[0] = 0;
-  cache.verified = false;
+  cache.cached_at_ms   = now_ms;
+  cache.populated      = true;
 
-  if (!fetch_route(plane->callsign, &cache)) {
-    cache.verified = true;
-    return;
-  }
+  fetch_recent_flight(plane->icao24, client_id, client_secret, &cache);
 
-  // Cross-check route against current plane position and ADS-B track.
-  if (!verify_route(&cache, plane)) {
-    cache.origin[0] = 0;
-    cache.destination[0] = 0;
-  }
-
-  cache.verified = true;
-  copy_into(plane->origin, sizeof(plane->origin), cache.origin);
+  copy_into(plane->origin,      sizeof(plane->origin),      cache.origin);
   copy_into(plane->destination, sizeof(plane->destination), cache.destination);
 }
 

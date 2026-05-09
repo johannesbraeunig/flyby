@@ -22,6 +22,8 @@ FetchStatus fetch_nearest(double, double, double, const char*, const char*,
   return FetchStatus::Ok;
 }
 
+const char* opensky_token(const char*, const char*) { return nullptr; }
+
 }  // namespace adsb
 
 #else
@@ -234,6 +236,11 @@ FetchStatus fetch_nearest(double obs_lat, double obs_lon, double radius_km,
     return FetchStatus::NoPlane;
   }
   return FetchStatus::Ok;
+}
+
+const char* opensky_token(const char* client_id, const char* client_secret) {
+  if (!ensure_token(client_id, client_secret)) return nullptr;
+  return cached_token;
 }
 
 }  // namespace adsb

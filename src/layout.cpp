@@ -52,10 +52,12 @@ void compose(const adsb::Plane& plane,
     out->l1_r = 255; out->l1_g = 255; out->l1_b = 255;
   }
 
-  // Line 2: route, or callsign as fallback.
-  if (plane.origin[0] && plane.destination[0]) {
-    std::snprintf(out->line2, sizeof(out->line2), "%s > %s",
-                  plane.origin, plane.destination);
+  // Line 2: route, or callsign as fallback. Tight ">" separator so 4-char
+  // ICAO codes (e.g. "EDDF>EDDM") fit in the 64-px panel width.
+  if (plane.origin[0] || plane.destination[0]) {
+    std::snprintf(out->line2, sizeof(out->line2), "%s>%s",
+                  plane.origin[0]      ? plane.origin      : "?",
+                  plane.destination[0] ? plane.destination : "?");
   } else {
     copy_into(out->line2, sizeof(out->line2),
               plane.callsign[0] ? plane.callsign : "");

@@ -8,7 +8,7 @@ Total cost: ~30 EUR.
 
 ```
      Condor           <- airline name (brand color)
-   FRA > JFK          <- route (origin > destination)
+  EDDF>KJFK           <- route (ICAO origin > destination)
     12km NO           <- distance + compass direction
 ```
 
@@ -80,8 +80,8 @@ Once flashed, the ESP32 stores WiFi credentials and location in non-volatile sto
 
 | Data | Source | Auth |
 |------|--------|------|
-| Live aircraft positions | [OpenSky Network API](https://opensky-network.org/api/states/all) | None (free) |
-| Flight routes (origin/destination) | [adsbdb.com](https://api.adsbdb.com/v0/callsign/) | None (free) |
+| Live aircraft positions | [OpenSky `/states/all`](https://opensky-network.org/api/states/all) | OAuth2 client credentials (optional, raises rate limits) |
+| Flight routes (origin/destination, ICAO) | [OpenSky `/flights/aircraft`](https://opensky-network.org/api/flights/aircraft) — keyed by ICAO24, returns the aircraft's actual recent flights | OAuth2 (same credentials) |
 | Aircraft type codes | [OpenSky Metadata API](https://opensky-network.org/api/metadata/aircraft/icao/) | None (free) |
 
 ## Getting started
@@ -120,7 +120,7 @@ Three lines, all centered, using the built-in 5x7 Adafruit GFX font:
 | Line | Content | Color |
 |------|---------|-------|
 | 1 | Airline name (or callsign if unknown) | Airline brand color |
-| 2 | Route: origin > destination | White |
+| 2 | Route: ICAO origin>destination (e.g. `EDDF>EDDH`), or callsign as fallback | White |
 | 3 | Distance + compass direction | Green (<5km), Yellow (<20km), Blue (>=20km) |
 
 The compass direction uses German abbreviations: N, NO, O, SO, S, SW, W, NW.
@@ -143,6 +143,16 @@ pio test -e native
 
 Pure C++ logic (haversine, bounding box, layout formatting, airline lookup, ADS-B parsing) is tested on your laptop without the ESP32 toolchain.
 
+### Serial logs
+
+While the ESP32 is connected over USB, stream serial output (115200 baud) and tee it to a file for later inspection:
+
+```bash
+pio device monitor -e esp32dev | tee ~/flyby.log
+```
+
+Useful lines to watch for: `heap: free=… maxAlloc=…` (per-fetch heap stats), `ADS-B GET …`, `Flight: <ICAO>-><ICAO>`, error frames like `ADS-B: HTTP 401`. `Ctrl-C` (or `Ctrl-T` then `q`) to quit.
+
 ### Wokwi simulator
 
 1. Install the **Wokwi for VS Code** extension.
@@ -164,7 +174,7 @@ src/
   adsb_fetch.cpp/h   HTTPS client for OpenSky API
   adsb_parse.cpp/h   JSON parser for OpenSky state vectors
   adsb_types.h       Plane struct (shared between parser and renderer)
-  route_lookup.cpp/h Route enrichment via adsbdb.com
+  route_lookup.cpp/h Route enrichment via OpenSky /flights/aircraft
   aircraft_type.cpp/h Aircraft type lookup via OpenSky metadata
   airlines.cpp/h     ICAO airline code > name + brand color table
   geo.cpp/h          Haversine distance, bounding box, bearing

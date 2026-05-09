@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <string.h>
+#include <time.h>
 
 #include "adsb_fetch.h"
 #include "adsb_types.h"
@@ -95,6 +96,8 @@ void enter_running() {
   Serial.println(F("WiFi connected"));
   Serial.print(F("IP: "));
   Serial.println(WiFi.localIP());
+  // Kick off NTP for /flights/aircraft begin/end timestamps.
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
   last_fetch_ms = millis() - kFetchIntervalMs;
   layout::compose_idle(&current_frame);
 }
@@ -145,7 +148,8 @@ void tick_running() {
 
   switch (status) {
     case adsb::FetchStatus::Ok: {
-      route_lookup::enrich(&plane);
+      route_lookup::enrich(&plane, cfg.opensky_client_id,
+                           cfg.opensky_client_secret);
       aircraft_type::enrich(&plane);
       log_plane(plane);
       const auto* airline = airlines::lookup(plane.callsign);

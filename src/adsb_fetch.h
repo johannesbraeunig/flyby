@@ -33,4 +33,11 @@ FetchStatus fetch_nearest(double obs_lat,
                           const char* client_secret,
                           Plane* out);
 
+// Returns a cached OAuth bearer token for OpenSky, refreshing if needed.
+// Returns nullptr if credentials are empty or refresh is in cooldown.
+// The returned pointer is valid until the next call.
+// Allows other modules (route_lookup) to authenticate against OpenSky
+// without duplicating the OAuth client-credentials flow.
+const char* opensky_token(const char* client_id, const char* client_secret);
+
 }  // namespace adsb
