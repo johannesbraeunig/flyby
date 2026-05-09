@@ -8,7 +8,7 @@ Total cost: ~30 EUR.
 
 ```
      Condor           <- airline name (brand color)
-  EDDF>KJFK           <- route (ICAO origin > destination)
+   FRA>JFK            <- route (IATA when adsbdb verified, ICAO fallback)
     12km NO           <- distance + compass direction
 ```
 
@@ -81,7 +81,8 @@ Once flashed, the ESP32 stores WiFi credentials and location in non-volatile sto
 | Data | Source | Auth |
 |------|--------|------|
 | Live aircraft positions | [OpenSky `/states/all`](https://opensky-network.org/api/states/all) | OAuth2 client credentials (optional, raises rate limits) |
-| Flight routes (origin/destination, ICAO) | [OpenSky `/flights/aircraft`](https://opensky-network.org/api/flights/aircraft) — keyed by ICAO24, returns the aircraft's actual recent flights | OAuth2 (same credentials) |
+| Flight routes — ground-truth (ICAO) | [OpenSky `/flights/aircraft`](https://opensky-network.org/api/flights/aircraft) — keyed by ICAO24, returns the aircraft's actual recent flights | OAuth2 (same credentials) |
+| Flight routes — IATA + early destination | [adsbdb.com](https://api.adsbdb.com/v0/callsign/) — keyed by callsign. Used when its origin ICAO matches OpenSky's departure (verified for today's rotation), giving readable IATA codes and a destination guess for in-flight planes. | None (free) |
 | Aircraft type codes | [OpenSky Metadata API](https://opensky-network.org/api/metadata/aircraft/icao/) | None (free) |
 
 ## Getting started
