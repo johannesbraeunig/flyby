@@ -23,6 +23,10 @@ constexpr size_t kMaxRouteBytes = 16 * 1024;
 constexpr size_t kMaxTrackBytes = 8 * 1024;
 constexpr double kMismatchKm = 150.0;
 constexpr int kTrackShortSec = 3600;
+// Max acceptable detour: how much longer (origin→plane→dest) can be vs the
+// great-circle origin→dest. Generous to allow descent vectoring and holding;
+// a wildly wrong adsbdb route puts the plane hundreds of km off and is caught.
+constexpr double kMaxDetourKm = 200.0;
 
 struct RouteCache {
   char callsign[9];
@@ -97,13 +101,34 @@ bool fetch_route(const char* callsign, RouteCache* out) {
 }
 
 // Returns true if route should be trusted.
-bool verify_route(const RouteCache* route, const char* icao24) {
+bool verify_route(const RouteCache* route, const adsb::Plane* plane) {
   if (isnan(route->origin_lat) || isnan(route->origin_lon)) return true;
+
+  // Geometric detour check: if the plane's current position makes the
+  // origin→plane→dest path far longer than origin→dest, the route is wrong.
+  // Cheap, no API call, catches "historical callsign mapping doesn't match
+  // today's flight" — the failure mode the track-based check misses.
+  if (!isnan(route->dest_lat) && !isnan(route->dest_lon)) {
+    double route_km = geo::haversine_km(
+        route->origin_lat, route->origin_lon,
+        route->dest_lat, route->dest_lon);
+    double leg_km = geo::haversine_km(
+        route->origin_lat, route->origin_lon, plane->lat, plane->lon)
+        + geo::haversine_km(
+        plane->lat, plane->lon, route->dest_lat, route->dest_lon);
+    double detour_km = leg_km - route_km;
+    Serial.printf("Detour check: route=%.0fkm leg=%.0fkm detour=%.0fkm\n",
+                  route_km, leg_km, detour_km);
+    if (detour_km > kMaxDetourKm) {
+      Serial.println(F("Detour: too far off-route — dropping"));
+      return false;
+    }
+  }
 
   char url[128];
   snprintf(url, sizeof(url),
            "https://opensky-network.org/api/tracks/all?icao24=%s&time=0",
-           icao24);
+           plane->icao24);
   Serial.print(F("Track GET "));
   Serial.println(url);
 
@@ -189,8 +214,8 @@ void enrich(adsb::Plane* plane) {
     return;
   }
 
-  // Cross-check against actual ADS-B track.
-  if (!verify_route(&cache, plane->icao24)) {
+  // Cross-check route against current plane position and ADS-B track.
+  if (!verify_route(&cache, plane)) {
     cache.origin[0] = 0;
     cache.destination[0] = 0;
   }
