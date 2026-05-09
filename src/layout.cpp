@@ -52,12 +52,17 @@ void compose(const adsb::Plane& plane,
     out->l1_r = 255; out->l1_g = 255; out->l1_b = 255;
   }
 
-  // Line 2: route, or callsign as fallback. Tight ">" separator so 4-char
-  // ICAO codes (e.g. "EDDF>EDDM") fit in the 64-px panel width.
-  if (plane.origin[0] || plane.destination[0]) {
-    std::snprintf(out->line2, sizeof(out->line2), "%s>%s",
-                  plane.origin[0]      ? plane.origin      : "?",
-                  plane.destination[0] ? plane.destination : "?");
+  // Line 2: route, or callsign as fallback. Both sides must be populated
+  // — partial routes ("CDG>?") are uglier than the callsign and usually
+  // mean we couldn't verify the missing side, so the callsign is the more
+  // honest fallback. Use " > " when it fits (max 10 chars at 6 px = 60 px
+  // on a 64 px panel), otherwise fall back to compact ">" so 4-char ICAO
+  // codes still render without clipping.
+  if (plane.origin[0] && plane.destination[0]) {
+    size_t total = std::strlen(plane.origin) + 3 + std::strlen(plane.destination);
+    const char* sep = total <= 10 ? " > " : ">";
+    std::snprintf(out->line2, sizeof(out->line2), "%s%s%s",
+                  plane.origin, sep, plane.destination);
   } else {
     copy_into(out->line2, sizeof(out->line2),
               plane.callsign[0] ? plane.callsign : "");
