@@ -18,4 +18,8 @@ namespace airports {
 // Safe for null and empty input.
 const char* icao_to_iata(const char* icao);
 
+// Returns a short city name for the given airport code (IATA or ICAO).
+// Tries IATA first (3-char), then ICAO (4-char). Returns nullptr if unknown.
+const char* code_to_city(const char* code);
+
 }  // namespace airports

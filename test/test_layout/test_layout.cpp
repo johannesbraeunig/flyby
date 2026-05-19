@@ -75,10 +75,12 @@ void test_compose_with_route(void) {
   layout::Frame f;
   layout::compose(p, nullptr, &f);
 
-  TEST_ASSERT_EQUAL_STRING("CDG > HAM", f.line2);
+  TEST_ASSERT_EQUAL_STRING("AFR123", f.line2);
+  TEST_ASSERT_EQUAL_STRING("Paris", f.line3_from);
+  TEST_ASSERT_EQUAL_STRING("Hamburg", f.line3_to);
   // Green because < 5km.
-  TEST_ASSERT_EQUAL_UINT8(0, f.l3_r);
-  TEST_ASSERT_EQUAL_UINT8(255, f.l3_g);
+  TEST_ASSERT_EQUAL_UINT8(0, f.l4_r);
+  TEST_ASSERT_EQUAL_UINT8(255, f.l4_g);
 }
 
 void test_compose_idle(void) {

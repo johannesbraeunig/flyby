@@ -30,8 +30,11 @@ src/
   config.{h,cpp}      // NVS-backed settings (ssid, pass, lat, lon, radius)
   wifi_setup.{h,cpp}  // WiFiManager glue + custom fields
   adsb.{h,cpp}        // OpenSky client + haversine + nearest-plane
-  display.{h,cpp}     // HUB75 init + 3-line drawing + scroll
+  display.{h,cpp}     // HUB75 init + 4-line drawing (FreeSansBold9pt + default)
+  render.{h,cpp}      // frame rendering with centered layout + pixel arrows
+  layout.{h,cpp}      // compose display frames from plane + airline data
   airlines.h          // PROGMEM ICAO → {name, brand RGB} table
+  airports.{h,cpp}    // ICAO/IATA → city name lookup
 ```
 
 ## Data flow
@@ -52,9 +55,10 @@ src/
                     │
                     ▼
             Display::render(plane, airline)
-              ├─ line 1: airline name in brand color (scroll if > 64 px)
-              ├─ line 2: flight# + route + type
-              └─ line 3: alt + speed + distance
+              ├─ line 1: airline name in brand color (FreeSansBold9pt)
+              ├─ line 2: callsign + aircraft type (e.g. "DLH441 A321neo")
+              ├─ line 3: route with city names (e.g. "Frankfurt>Hamburg")
+              └─ line 4: distance + direction + FL + climb/descend arrow
 ```
 
 ## ADS-B source
@@ -67,7 +71,7 @@ Rate limits (anonymous): ~10 requests/minute — well within our 30 s cadence.
 
 ## Memory considerations
 
-The ESP32-WROOM-32 has ~320 KB of usable SRAM, and the HUB75 DMA buffer for a 64×32 panel at ~24-bit color eats a meaningful chunk. Guidelines:
+The ESP32-WROOM-32 has ~320 KB of usable SRAM, and the HUB75 DMA buffer for a 128×64 panel at ~24-bit color eats a meaningful chunk. Guidelines:
 
 - **Stream-parse JSON** with an `ArduinoJson` filter — never load the full `states/all` response into RAM.
 - Keep the airline table in **PROGMEM** (`const PROGMEM`).

@@ -4,10 +4,55 @@
 #include <cstdio>
 #include <cstring>
 
+#include "airports.h"
 #include "geo.h"
 
 namespace layout {
 namespace {
+
+struct TypeName { const char* icao; const char* name; };
+const TypeName kTypeNames[] = {
+    {"A20N", "A320neo"}, {"A21N", "A321neo"},
+    {"A19N", "A319neo"}, {"A318", "A318"},
+    {"A319", "A319"},    {"A320", "A320"},
+    {"A321", "A321"},    {"A332", "A330"},
+    {"A333", "A330"},    {"A339", "A330neo"},
+    {"A342", "A340"},    {"A343", "A340"},
+    {"A345", "A340"},    {"A346", "A340"},
+    {"A359", "A350"},    {"A35K", "A350"},
+    {"A388", "A380"},
+    {"B732", "B737"},    {"B733", "B737"},
+    {"B734", "B737"},    {"B735", "B737"},
+    {"B736", "B737"},    {"B737", "B737"},
+    {"B738", "B737-800"},{"B739", "B737-900"},
+    {"B37M", "B737MAX"}, {"B38M", "B737MAX8"},
+    {"B39M", "B737MAX9"},
+    {"B748", "B747-8"},  {"B744", "B747"},
+    {"B752", "B757"},    {"B753", "B757"},
+    {"B762", "B767"},    {"B763", "B767"},
+    {"B764", "B767"},
+    {"B772", "B777"},    {"B773", "B777"},
+    {"B77L", "B777"},    {"B77W", "B777"},
+    {"B788", "B787"},    {"B789", "B787"},
+    {"B78X", "B787-10"},
+    {"BCS1", "A220"},    {"BCS3", "A220"},
+    {"C172", "Cessna172"},
+    {"CRJ7", "CRJ700"}, {"CRJ9", "CRJ900"},
+    {"DH8D", "Dash8"},
+    {"E170", "E170"},    {"E190", "E190"},
+    {"E195", "E195"},    {"E75L", "E175"},
+    {"E290", "E190-E2"}, {"E295", "E195-E2"},
+};
+constexpr int kTypeCount = sizeof(kTypeNames) / sizeof(kTypeNames[0]);
+
+const char* display_type(const char* icao_type) {
+  if (!icao_type || !icao_type[0]) return nullptr;
+  for (int i = 0; i < kTypeCount; ++i) {
+    if (std::strcmp(kTypeNames[i].icao, icao_type) == 0)
+      return kTypeNames[i].name;
+  }
+  return icao_type;
+}
 
 void copy_into(char* dst, size_t dst_size, const char* src) {
   if (!dst || dst_size == 0) return;
@@ -37,7 +82,7 @@ void compose(const adsb::Plane& plane,
              Frame* out) {
   if (!out) return;
 
-  // Line 1: airline name in brand color, or 3-letter ICAO prefix as fallback.
+  // Line 1: airline name in brand color (2x font).
   if (airline) {
     copy_into(out->line1, sizeof(out->line1), airline->name);
     out->l1_r = airline->r; out->l1_g = airline->g; out->l1_b = airline->b;
@@ -52,40 +97,66 @@ void compose(const adsb::Plane& plane,
     out->l1_r = 255; out->l1_g = 255; out->l1_b = 255;
   }
 
-  // Line 2: route, or callsign as fallback. Both sides must be populated
-  // — partial routes ("CDG>?") are uglier than the callsign and usually
-  // mean we couldn't verify the missing side, so the callsign is the more
-  // honest fallback. Use " > " when it fits (max 10 chars at 6 px = 60 px
-  // on a 64 px panel), otherwise fall back to compact ">" so 4-char ICAO
-  // codes still render without clipping.
-  if (plane.origin[0] && plane.destination[0]) {
-    size_t total = std::strlen(plane.origin) + 3 + std::strlen(plane.destination);
-    const char* sep = total <= 10 ? " > " : ">";
-    std::snprintf(out->line2, sizeof(out->line2), "%s%s%s",
-                  plane.origin, sep, plane.destination);
+  // Line 2: callsign + aircraft type.
+  const char* type = display_type(plane.aircraft_type);
+  if (plane.callsign[0] && type) {
+    std::snprintf(out->line2, sizeof(out->line2), "%s %s",
+                  plane.callsign, type);
+  } else if (plane.callsign[0]) {
+    copy_into(out->line2, sizeof(out->line2), plane.callsign);
+  } else if (type) {
+    copy_into(out->line2, sizeof(out->line2), type);
   } else {
-    copy_into(out->line2, sizeof(out->line2),
-              plane.callsign[0] ? plane.callsign : "");
+    out->line2[0] = 0;
   }
-  out->l2_r = 200; out->l2_g = 200; out->l2_b = 200;
+  out->l2_r = 180; out->l2_g = 180; out->l2_b = 180;
 
-  // Line 3: direction + distance.
+  // Line 3: route with city names (stored as two halves).
+  if (plane.origin[0] && plane.destination[0]) {
+    const char* from = airports::code_to_city(plane.origin);
+    const char* to   = airports::code_to_city(plane.destination);
+    copy_into(out->line3_from, sizeof(out->line3_from), from ? from : plane.origin);
+    copy_into(out->line3_to,   sizeof(out->line3_to),   to   ? to   : plane.destination);
+  } else {
+    out->line3_from[0] = 0;
+    out->line3_to[0]   = 0;
+  }
+  out->l3_r = 200; out->l3_g = 200; out->l3_b = 200;
+
+  // Line 4: distance + direction + altitude.
   char km[8];
   format_distance_km(plane.distance_km, km, sizeof(km));
 
-  if (!std::isnan(plane.bearing_deg)) {
-    const char* dir = geo::bearing_to_compass(plane.bearing_deg);
-    std::snprintf(out->line3, sizeof(out->line3), "%s %s", dir, km);
-  } else {
-    copy_into(out->line3, sizeof(out->line3), km);
+  const char* dir = "";
+  if (!std::isnan(plane.bearing_deg))
+    dir = geo::bearing_to_compass(plane.bearing_deg);
+
+  char alt[8] = "";
+  if (!std::isnan(plane.alt_m) && plane.alt_m > 0.0f) {
+    int fl = static_cast<int>(std::round(plane.alt_m * 3.28084f / 100.0f));
+    std::snprintf(alt, sizeof(alt), "FL%d", fl);
   }
 
+  // Vertical rate: 1 = climbing, -1 = descending, 0 = level.
+  out->vrate_dir = 0;
+  if (!std::isnan(plane.vrate_mps)) {
+    if (plane.vrate_mps > 0.5f)       out->vrate_dir = 1;
+    else if (plane.vrate_mps < -0.5f) out->vrate_dir = -1;
+  }
+
+  int pos = 0;
+  pos += std::snprintf(out->line4 + pos, sizeof(out->line4) - pos, "%s", km);
+  if (dir[0])
+    pos += std::snprintf(out->line4 + pos, sizeof(out->line4) - pos, " %s", dir);
+  if (alt[0])
+    std::snprintf(out->line4 + pos, sizeof(out->line4) - pos, " %s", alt);
+
   if (!std::isnan(plane.distance_km) && plane.distance_km < kDistGreenKm) {
-    out->l3_r = 0; out->l3_g = 255; out->l3_b = 0;
+    out->l4_r = 0; out->l4_g = 255; out->l4_b = 0;
   } else if (!std::isnan(plane.distance_km) && plane.distance_km < kDistYellowKm) {
-    out->l3_r = 255; out->l3_g = 200; out->l3_b = 0;
+    out->l4_r = 255; out->l4_g = 200; out->l4_b = 0;
   } else {
-    out->l3_r = 80; out->l3_g = 140; out->l3_b = 255;
+    out->l4_r = 80; out->l4_g = 140; out->l4_b = 255;
   }
 
   out->is_idle = false;
@@ -99,8 +170,13 @@ void compose_idle(Frame* out) {
   out->line2[0] = 0;
   out->l2_r = 0; out->l2_g = 0; out->l2_b = 0;
 
-  out->line3[0] = 0;
+  out->line3_from[0] = 0;
+  out->line3_to[0]   = 0;
   out->l3_r = 0; out->l3_g = 0; out->l3_b = 0;
+
+  out->line4[0] = 0;
+  out->l4_r = 0; out->l4_g = 0; out->l4_b = 0;
+  out->vrate_dir = 0;
 
   out->is_idle = true;
 }
