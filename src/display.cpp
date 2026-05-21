@@ -25,6 +25,9 @@ bool init() {
       kLAT, kOE, kCLK,
   };
   HUB75_I2S_CFG cfg(kWidth, kHeight, kChain, pins);
+  cfg.double_buff = true;
+  cfg.min_refresh_rate = 120;
+  cfg.latch_blanking = 2;
   cfg.i2sspeed = HUB75_I2S_CFG::HZ_10M;
   cfg.clkphase = false;
 
@@ -110,6 +113,7 @@ void drawArrowLevel(int x, int y, uint16_t color) {
 }
 
 void flush() {
+  if (panel) panel->flipDMABuffer();
 }
 
 }  // namespace display
