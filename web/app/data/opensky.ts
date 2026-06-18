@@ -317,6 +317,83 @@ function staleFromCached(
   return buildResult(entry, observed, { reason })
 }
 
+// Outcome of a "get all nearby" query.
+export type NearbyResult =
+  | { kind: 'ok'; planes: Plane[]; observed: { lat: number; lon: number; radiusKm: number }; fetchedAt: number; stale: false }
+  | { kind: 'ok-stale'; planes: Plane[]; observed: { lat: number; lon: number; radiusKm: number }; fetchedAt: number; stale: true; reason: string }
+  | { kind: 'empty'; observed: { lat: number; lon: number; radiusKm: number }; fetchedAt: number }
+  | { kind: 'rate-limited'; observed: { lat: number; lon: number; radiusKm: number }; retryAfterSec: number | null }
+  | { kind: 'error'; observed: { lat: number; lon: number; radiusKm: number }; message: string }
+
+function buildNearbyResult(
+  entry: CacheEntry,
+  observed: { lat: number; lon: number; radiusKm: number },
+  stale: false | { reason: string },
+): NearbyResult {
+  let ranked = rankByDistance(entry.positions, observed.lat, observed.lon)
+  let candidates = ranked.filter((p) => p.distanceKm <= observed.radiusKm)
+  if (candidates.length === 0) {
+    return { kind: 'empty', observed, fetchedAt: entry.fetchedAt }
+  }
+  if (stale) {
+    return {
+      kind: 'ok-stale',
+      planes: candidates,
+      observed,
+      fetchedAt: entry.fetchedAt,
+      stale: true,
+      reason: stale.reason,
+    }
+  }
+  return { kind: 'ok', planes: candidates, observed, fetchedAt: entry.fetchedAt, stale: false }
+}
+
+// Public entrypoint: get ALL airborne aircraft within radiusKm of
+// (lat, lon), sorted by distance. Uses the same cache as
+// getNearestAircraft. Always returns a NearbyResult — never throws.
+export async function getAllNearbyAircraft(
+  lat: number,
+  lon: number,
+  radiusKm: number,
+): Promise<NearbyResult> {
+  let observed = { lat, lon, radiusKm }
+  let bbox = bboxFor(lat, lon, radiusKm)
+  let key = cacheKey(bbox)
+  let now = Date.now()
+
+  let cached = cache.get(key)
+  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    return buildNearbyResult(cached, observed, false)
+  }
+
+  let controller = new AbortController()
+  let timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    let json = await fetchStates(bbox, controller.signal)
+    let positions = parseStates(json)
+    let entry: CacheEntry = { bbox, positions, fetchedAt: Date.now() }
+    cache.delete(key)
+    cache.set(key, entry)
+    evictIfFull()
+    return buildNearbyResult(entry, observed, false)
+  } catch (raw) {
+    let err = raw as Error & { rateLimited?: boolean; retryAfterSec?: number | null; name?: string }
+    if (err.rateLimited) {
+      if (cached) {
+        return buildNearbyResult(cached, observed, { reason: `rate limited; retry in ${err.retryAfterSec ?? '~10'}s` })
+      }
+      return { kind: 'rate-limited', observed, retryAfterSec: err.retryAfterSec ?? null }
+    }
+    let reason = err.name === 'AbortError' ? 'OpenSky timeout' : err.message || 'OpenSky error'
+    if (cached) {
+      return buildNearbyResult(cached, observed, { reason })
+    }
+    return { kind: 'error', observed, message: err.message || String(err) }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Test hook: clear the in-memory cache between tests.
 export function __resetCacheForTests() {
   cache.clear()
